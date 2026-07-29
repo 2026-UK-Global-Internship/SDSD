@@ -42,6 +42,7 @@ dependencies:
   http: ^1.6.0 # 백엔드 REST API 통신
   provider: ^6.1.5+1 # 상태 관리
   shared_preferences: ^2.5.5 # 세션/로그인 토큰 저장
+  firebase_core: ^4.12.1
 
 dev_dependencies:
   flutter_test:
