@@ -1,7 +1,12 @@
 // This is a generated file; do not edit or check into version control.
+<<<<<<< HEAD
+FLUTTER_ROOT=C:\Users\sec\Documents\flutter_windows_3.41.5-stable\flutter
+FLUTTER_APPLICATION_PATH=C:\UK_Global\SDSD
+=======
 FLUTTER_ROOT=C:\Users\oey12\flutter_windows_3.41.4-stable\flutter
 FLUTTER_APPLICATION_PATH=C:\Users\oey12\Documents\UK_global_internship\SDSD
 FLUTTER_FRAMEWORK_SWIFT_PACKAGE_PATH=C:\Users\oey12\Documents\UK_global_internship\SDSD\macos\Flutter\ephemeral\Packages\.packages\FlutterFramework
+>>>>>>> 15ff929033017c8a4219af72591ae730d27f187b
 COCOAPODS_PARALLEL_CODE_SIGN=true
 FLUTTER_BUILD_DIR=build
 FLUTTER_BUILD_NAME=1.0.0

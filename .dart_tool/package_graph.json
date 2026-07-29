@@ -71,7 +71,11 @@
     },
     {
       "name": "meta",
+<<<<<<< HEAD
+      "version": "1.17.0",
+=======
       "version": "1.18.0",
+>>>>>>> 15ff929033017c8a4219af72591ae730d27f187b
       "dependencies": []
     },
     {
@@ -133,7 +137,11 @@
     },
     {
       "name": "test_api",
+<<<<<<< HEAD
+      "version": "0.7.10",
+=======
       "version": "0.7.11",
+>>>>>>> 15ff929033017c8a4219af72591ae730d27f187b
       "dependencies": [
         "async",
         "boolean_selector",

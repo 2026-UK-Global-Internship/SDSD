@@ -54,3 +54,17 @@ node_modules/
 .idea/
 .vscode/
 .env
+# Auto-generated files (prevent merge conflicts)
+**/android/local.properties
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/ephemeral/
+**/macos/Flutter/ephemeral/
+**/Flutter/GeneratedPluginRegistrant.swift
+**/flutter/generated_plugin_registrant.cc
+**/flutter/generated_plugin_registrant.h
+**/flutter/generated_plugins.cmake
+**/.metadata
+
+# Firebase secrets (API keys should not be public)
+**/google-services.json
