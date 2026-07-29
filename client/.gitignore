@@ -32,6 +32,7 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+node_modules/
 
 # Symbolication related
 app.*.symbols
@@ -44,3 +45,12 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 flutter_*.png
+
+node_modules/
+**/build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.idea/
+.vscode/
+.env
