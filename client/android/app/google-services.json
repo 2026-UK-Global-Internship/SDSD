@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "750213526967",
+    "project_id": "sdsd-a3d61",
+    "storage_bucket": "sdsd-a3d61.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:750213526967:android:7675fb6291a89e5662a432",
+        "android_client_info": {
+          "package_name": "com.example.sdsd"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBvtsVO3u06NKHKkOM4YxhyLUzsN7TXFNs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
