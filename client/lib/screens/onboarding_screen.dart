@@ -54,35 +54,38 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget _buildCloudsPage() {
     return Container(
       color: const Color(0xFFEFEFEF),
-      child: Column(
-        children: [
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              color: const Color(0xFFEFEFEF),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.asset(
-                    'assets/images/onboarding_clouds.png',
-                    fit: BoxFit.cover,
-                  ),
-                  Center(
-                    child: Image.asset(
-                      'assets/images/dusty.png',
-                      width: 170,
-                      height: 163,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                color: const Color(0xFFEFEFEF),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.asset(
+                      'assets/images/onboarding_clouds.png',
+                      fit: BoxFit.cover,
                     ),
-                  ),
-                ],
+                    Center(
+                      child: Image.asset(
+                        'assets/images/dusty.png',
+                        width: 170,
+                        height: 163,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          _buildBottom(
-            title: 'Feed Your Pet,\nClean the Planet.',
-            buttonLabel: 'Continue',
-          ),
-        ],
+            _buildBottom(
+              title: 'Feed Your Pet,\nClean the Planet.',
+              buttonLabel: 'Continue',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -139,56 +142,59 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // ---------- 공통 하단 (텍스트 + 점 + 버튼) ----------
   Widget _buildBottom({required String title, required String buttonLabel}) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w500,
-              fontSize: 30,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(_pageCount, (index) {
-              return Container(
-                width: 8,
-                height: 8,
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _currentPage == index
-                      ? Colors.black
-                      : Colors.black.withValues(alpha: 0.2),
-                ),
-              );
-            }),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: ElevatedButton(
-              onPressed: _nextPage,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(28),
-                ),
-              ),
-              child: Text(
-                buttonLabel,
-                style: AppTextStyles.semiBold20.copyWith(color: Colors.white),
+    return SizedBox(
+      height: 280, // 하단 영역 전체 높이 — 이 숫자로 영역 크기 조절
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w500,
+                fontSize: 30,
+                height: 1.2,
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 21),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: List.generate(_pageCount, (index) {
+                return Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _currentPage == index
+                        ? Colors.black
+                        : Colors.black.withValues(alpha: 0.2),
+                  ),
+                );
+              }),
+            ),
+            const Spacer(), // ← 남는 공간을 여기가 다 먹음 → 글씨+점은 위로, 버튼은 아래로
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _nextPage,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28),
+                  ),
+                ),
+                child: Text(
+                  buttonLabel,
+                  style: AppTextStyles.semiBold20.copyWith(color: Colors.white),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
