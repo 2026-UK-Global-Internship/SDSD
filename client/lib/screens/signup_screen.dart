@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'signin_screen.dart';
+import 'name_screen.dart';
 
 class SignupScreen extends StatelessWidget {
   const SignupScreen({super.key});
@@ -34,8 +35,8 @@ class SignupScreen extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w700,
-                    fontSize: 32,
-                    height: 1.15,
+                    fontSize: 40,
+                    height: 1,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -102,6 +103,9 @@ class SignupScreen extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: () {
                         // TODO: Firebase 회원가입 연결
+                        Navigator.of(
+                          context,
+                        ).push(MaterialPageRoute(builder: (_) => NameScreen()));
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
