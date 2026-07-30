@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_text_styles.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -69,7 +70,9 @@ class LoginScreen extends StatelessWidget {
                 Center(
                   child: GestureDetector(
                     onTap: () {
-                      // TODO: 이메일 회원가입 페이지로 이동
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SignupScreen()),
+                      );
                     },
                     child: const Text(
                       'Or continue with email',
