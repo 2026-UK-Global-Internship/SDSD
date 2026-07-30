@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'goal_screen.dart';
 
 class UsernameScreen extends StatefulWidget {
   const UsernameScreen({super.key, required this.name});
@@ -107,7 +108,11 @@ class _UsernameScreenState extends State<UsernameScreen> {
                         width: 26,
                         height: 26,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFBBF24),
+                          gradient: const LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0xFFFBBF24), Color(0xFFF472B6)],
+                          ),
                           borderRadius: BorderRadius.circular(7),
                         ),
                         child: const Icon(
@@ -125,7 +130,11 @@ class _UsernameScreenState extends State<UsernameScreen> {
                   child: ElevatedButton(
                     onPressed: _hasText
                         ? () {
-                            // TODO: 주간 목표(Welcome) 화면으로 이동
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => GoalScreen(name: widget.name),
+                              ),
+                            );
                           }
                         : null,
                     style: ElevatedButton.styleFrom(
