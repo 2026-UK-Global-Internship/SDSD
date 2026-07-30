@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
-import 'username_screen.dart';
 
-class NameScreen extends StatefulWidget {
-  const NameScreen({super.key});
+class UsernameScreen extends StatefulWidget {
+  const UsernameScreen({super.key, required this.name});
+
+  final String name; // ← 이전 화면에서 전달받는 이름
 
   @override
-  State<NameScreen> createState() => _NameScreenState();
+  State<UsernameScreen> createState() => _UsernameScreenState();
 }
 
-class _NameScreenState extends State<NameScreen> {
-  final TextEditingController _nameController = TextEditingController();
+class _UsernameScreenState extends State<UsernameScreen> {
+  final TextEditingController _usernameController = TextEditingController();
   bool _hasText = false;
 
   static const _gradient = LinearGradient(
@@ -21,17 +22,16 @@ class _NameScreenState extends State<NameScreen> {
   @override
   void initState() {
     super.initState();
-    // 입력값이 바뀔 때마다 실행됨
-    _nameController.addListener(() {
+    _usernameController.addListener(() {
       setState(() {
-        _hasText = _nameController.text.trim().isNotEmpty;
+        _hasText = _usernameController.text.trim().isNotEmpty;
       });
     });
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _usernameController.dispose();
     super.dispose();
   }
 
@@ -53,7 +53,7 @@ class _NameScreenState extends State<NameScreen> {
                 ),
                 const SizedBox(height: 32),
                 const Text(
-                  'What should\nwe call you?',
+                  'Choose a\nusername',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w700,
@@ -63,7 +63,7 @@ class _NameScreenState extends State<NameScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Enter your name.',
+                  'This is how other users will find you.',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w500,
@@ -71,37 +71,61 @@ class _NameScreenState extends State<NameScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    hintText: 'name',
-                    hintStyle: TextStyle(
-                      fontFamily: 'Inter',
-                      color: Colors.black54,
+                // @ 붙은 username 입력창 + 체크 표시
+                Row(
+                  children: [
+                    const Text(
+                      '@',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w500,
+                        fontSize: 18,
+                      ),
                     ),
-                    enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.black38),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _usernameController,
+                        decoration: const InputDecoration(
+                          hintText: 'username',
+                          hintStyle: TextStyle(
+                            fontFamily: 'Inter',
+                            color: Colors.black54,
+                          ),
+                          enabledBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.black38),
+                          ),
+                          focusedBorder: UnderlineInputBorder(
+                            borderSide: BorderSide(color: Colors.black),
+                          ),
+                        ),
+                      ),
                     ),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.black),
-                    ),
-                  ),
+                    // 입력하면 나타나는 체크 아이콘
+                    if (_hasText)
+                      Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFBBF24),
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        child: const Icon(
+                          Icons.check,
+                          size: 18,
+                          color: Colors.white,
+                        ),
+                      ),
+                  ],
                 ),
                 const Spacer(),
-                // Continue 버튼 — 입력 있으면 검정, 없으면 흐릿
                 SizedBox(
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
                     onPressed: _hasText
                         ? () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => UsernameScreen(
-                                  name: _nameController.text.trim(),
-                                ),
-                              ),
-                            );
+                            // TODO: 주간 목표(Welcome) 화면으로 이동
                           }
                         : null,
                     style: ElevatedButton.styleFrom(
