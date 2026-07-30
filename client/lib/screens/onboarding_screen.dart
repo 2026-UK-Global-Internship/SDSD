@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_text_styles.dart';
+import 'login_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -27,7 +28,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      //TODO: Start 누르면 다음 화면(회원가입/홈)으로 이동
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
     }
   }
 
@@ -67,7 +70,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   children: [
                     Image.asset(
                       'assets/images/onboarding_clouds.png',
-                      fit: BoxFit.cover,
+                      fit: BoxFit.fitWidth,
+                      alignment: Alignment.topCenter,
                     ),
                     Center(
                       child: Image.asset(
@@ -143,7 +147,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // ---------- 공통 하단 (텍스트 + 점 + 버튼) ----------
   Widget _buildBottom({required String title, required String buttonLabel}) {
     return SizedBox(
-      height: 280, // 하단 영역 전체 높이 — 이 숫자로 영역 크기 조절
+      height: 260, // 하단 영역 전체 높이 — 이 숫자로 영역 크기 조절
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
         child: Column(
