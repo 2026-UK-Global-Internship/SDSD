@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'signin_screen.dart';
 
-class SignupScreen extends StatelessWidget {
-  const SignupScreen({super.key});
+class SigninScreen extends StatelessWidget {
+  const SigninScreen({super.key});
 
   static const _gradient = LinearGradient(
     begin: Alignment.topCenter,
@@ -22,13 +21,11 @@ class SignupScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 93),
-                // 뒤로가기 버튼
                 GestureDetector(
                   onTap: () => Navigator.of(context).pop(),
                   child: const Icon(Icons.arrow_back_ios, size: 24),
                 ),
                 const SizedBox(height: 32),
-                // 제목
                 const Text(
                   'Ready to run\nand clean?',
                   style: TextStyle(
@@ -40,7 +37,7 @@ class SignupScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Start with email.',
+                  'Continue with email.',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w500,
@@ -48,7 +45,6 @@ class SignupScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 32),
-                // 이메일 입력창
                 const TextField(
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
@@ -66,7 +62,6 @@ class SignupScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // 비밀번호 입력창
                 const TextField(
                   obscureText: true,
                   decoration: InputDecoration(
@@ -84,7 +79,6 @@ class SignupScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 40),
-                // Sign up 버튼 (그라데이션)
                 SizedBox(
                   width: double.infinity,
                   height: 52,
@@ -101,7 +95,7 @@ class SignupScreen extends StatelessWidget {
                     ),
                     child: ElevatedButton(
                       onPressed: () {
-                        // TODO: Firebase 회원가입 연결
+                        // TODO: Firebase 로그인 연결
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
@@ -111,43 +105,13 @@ class SignupScreen extends StatelessWidget {
                         ),
                       ),
                       child: const Text(
-                        'Sign up',
+                        'Sign in',
                         style: TextStyle(
                           fontFamily: 'Inter',
                           fontWeight: FontWeight.w600,
                           fontSize: 18,
                           color: Colors.white,
                         ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Sign in 링크
-                Center(
-                  child: GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const SigninScreen()),
-                      );
-                    },
-                    child: RichText(
-                      text: const TextSpan(
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 14,
-                          color: Colors.black87,
-                        ),
-                        children: [
-                          TextSpan(text: 'Already have an account? '),
-                          TextSpan(
-                            text: 'Sign in',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ],
                       ),
                     ),
                   ),
