@@ -82,6 +82,11 @@ flutter:
           weight: 600
         - asset: assets/fonts/Inter_18pt-Bold.ttf
           weight: 700
+        - asset: assets/fonts/Inter_18pt-Black.ttf
+          weight: 900
+        - asset: assets/fonts/Inter_18pt-BlackItalic.ttf
+          weight: 900
+          style: italic
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -14,7 +14,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(seconds: 2), () {
+    Timer(const Duration(seconds: 50), () {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const OnboardingScreen()),
@@ -30,11 +30,14 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset('assets/images/dusty.png', width: 140),
+            Image.asset('assets/images/dusty.png', width: 150),
             const SizedBox(height: 24),
             Text(
               'SDSD',
-              style: AppTextStyles.bold40.copyWith(fontStyle: FontStyle.italic),
+              style: AppTextStyles.bold40.copyWith(
+                fontWeight: FontWeight.w900,
+                fontStyle: FontStyle.italic,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
