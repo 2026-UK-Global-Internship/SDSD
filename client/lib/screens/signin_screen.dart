@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'home_screen.dart';
 
 class SigninScreen extends StatelessWidget {
   const SigninScreen({super.key});
@@ -37,11 +38,13 @@ class SigninScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Continue with email.',
+                  'Continue\nPlogging!',
                   style: TextStyle(
                     fontFamily: 'Inter',
-                    fontWeight: FontWeight.w500,
-                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 60,
+                    height: 1.0,
+                    color: Colors.white,
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -96,6 +99,11 @@ class SigninScreen extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: () {
                         // TODO: Firebase 로그인 연결
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (_) => const HomeScreen(name: 'Alan'),
+                          ),
+                        );
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,

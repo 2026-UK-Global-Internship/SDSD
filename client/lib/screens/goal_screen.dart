@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'home_screen.dart';
 
 class GoalScreen extends StatefulWidget {
   const GoalScreen({super.key, required this.name});
@@ -83,7 +84,11 @@ class _GoalScreenState extends State<GoalScreen> {
                   child: ElevatedButton(
                     onPressed: _selectedGoal != null
                         ? () {
-                            // TODO: 홈 화면으로 이동 + Firebase에 저장
+                            Navigator.of(context).pushReplacement(
+                              MaterialPageRoute(
+                                builder: (_) => HomeScreen(name: widget.name),
+                              ),
+                            );
                           }
                         : null,
                     style: ElevatedButton.styleFrom(
