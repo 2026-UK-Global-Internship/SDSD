@@ -4,6 +4,19 @@ allprojects {
         mavenCentral()
     }
 }
+android {
+    compileSdkVersion 34  // 최신 버전으로 업데이트
+
+    defaultConfig {
+        minSdkVersion 21
+        // ...
+    }
+}
+
+dependencies {
+    // Google Play Services 추가
+    implementation 'com.google.android.gms:play-services-auth:20.7.0'
+}
 
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
