@@ -1,7 +1,8 @@
 //signin_screen.dart
 import 'package:flutter/material.dart';
-import 'package:sdsd/server/services/auth_service.dart'; // ← 변경: 실제 위치(lib/server/services)에 맞춘 패키지 경로
-import 'name_screen.dart'; // ← 추가: 신규 유저 온보딩 화면
+import 'home_screen.dart';
+import 'package:sdsd/server/services/auth_service.dart';
+import 'name_screen.dart';
 
 class SigninScreen extends StatefulWidget {
   // ← 변경: StatelessWidget → StatefulWidget
@@ -69,8 +70,9 @@ class _SigninScreenState extends State<SigninScreen> {
       // 로그인 성공 → 홈 화면으로 이동
       // (추후에 실제 홈 화면 경로로 변경 필요)
       if (mounted) {
-        _showSuccessSnackBar('로그인 성공했습니다!');
-        // Navigator.of(context).pushReplacementNamed('/home');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen(name: 'User')),
+        );
       }
     } catch (e) {
       // 로그인 실패 → 오류 메시지 표시
@@ -176,11 +178,13 @@ class _SigninScreenState extends State<SigninScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Continue with email.',
+                  'Continue with email',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w500,
                     fontSize: 16,
+                    height: 1.0,
+                    color: Colors.black,
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -246,9 +250,7 @@ class _SigninScreenState extends State<SigninScreen> {
                       ),
                     ),
                     child: ElevatedButton(
-                      onPressed: _isAnyLoading
-                          ? null
-                          : _handleSignIn, // ← 변경: 로그인 로직 연결
+                      onPressed: _isAnyLoading ? null : _handleSignIn,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
                         shadowColor: Colors.transparent,

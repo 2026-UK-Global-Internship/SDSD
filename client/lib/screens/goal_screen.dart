@@ -1,6 +1,7 @@
 //goal_screen.dart
 import 'package:flutter/material.dart';
-import 'package:sdsd/server/services/auth_service.dart'; // ← 변경: 실제 위치(lib/server/services)에 맞춘 패키지 경로
+import 'home_screen.dart';
+import 'package:sdsd/server/services/auth_service.dart';
 
 class GoalScreen extends StatefulWidget {
   const GoalScreen({super.key, required this.name});
@@ -12,22 +13,12 @@ class GoalScreen extends StatefulWidget {
 }
 
 class _GoalScreenState extends State<GoalScreen> {
-  int? _selectedGoal; // null = 아직 선택 안 함, 0/1/2 = 선택한 카드
-  bool _isLoading = false; // ← 추가: Firebase 저장 진행 중 여부
+  int? _selectedGoal;
+  bool _isLoading = false;
 
-  // Firebase 서비스 인스턴스
   final AuthService _authService = AuthService();
 
-  // ==========================================
-  // 카드 인덱스 → Firestore weeklyGoal 값
-  // ==========================================
-  // 카드 이름(Beginner/Regular/Eco Hero)을 그대로 반영한 값입니다.
-  // (auth_service.updateWeeklyGoal()의 허용값도 이와 동일하게 맞춰뒀습니다)
-  static const List<String> _goalValues = [
-    'beginner', // index 0: Beginner
-    'regular', // index 1: Regular
-    'ecoHero', // index 2: Eco Hero
-  ];
+  static const List<String> _goalValues = ['beginner', 'regular', 'ecoHero'];
 
   static const _gradient = LinearGradient(
     begin: Alignment.topCenter,
@@ -35,73 +26,48 @@ class _GoalScreenState extends State<GoalScreen> {
     colors: [Color(0xFFFBBF24), Color(0xFFF472B6)],
   );
 
-  // ==========================================
-  // Continue 버튼을 눌렀을 때 실행되는 함수
-  // ==========================================
   Future<void> _handleContinue() async {
-    // 선택 안 했으면 아무것도 하지 않음 (버튼이 disabled라 이 경우는 거의 없음)
     if (_selectedGoal == null) return;
 
     setState(() {
-      _isLoading = true; // 로딩 시작
+      _isLoading = true;
     });
 
     try {
-      // 현재 로그인한 사용자의 UID 가져오기
       final uid = _authService.currentUserId;
 
       if (uid == null) {
         throw Exception('로그인된 사용자가 없습니다');
       }
 
-      // 선택한 카드 인덱스를 Firestore가 허용하는 문자열로 변환
       final goalValue = _goalValues[_selectedGoal!];
 
-      // Firebase에 weeklyGoal 저장
       await _authService.updateWeeklyGoal(uid, goalValue);
-
-      // ★ 여기서 온보딩을 "완료"로 표시합니다.
-      //   이 호출이 없으면 사용자는 다음에 로그인해도
-      //   영원히 "온보딩 안 끝난 사용자"로 남게 됩니다.
       await _authService.completeOnboarding(uid);
 
       // 저장 성공 → 홈 화면으로 이동
       if (mounted) {
-        // TODO: 실제 홈 화면이 만들어지면 아래 주석을 해제하고 경로를 맞춰주세요.
-        // Navigator.of(context).pushReplacementNamed('/home');
-        _showSuccessSnackBar('목표가 설정되었습니다!');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => HomeScreen(name: widget.name)),
+        );
       }
     } catch (e) {
-      // 저장 실패 → 오류 메시지 표시
       _showErrorSnackBar(e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) {
         setState(() {
-          _isLoading = false; // 로딩 종료
+          _isLoading = false;
         });
       }
     }
   }
 
-  // ==========================================
-  // SnackBar 표시 함수들
-  // ==========================================
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red[600],
         duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green[600],
-        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -118,7 +84,6 @@ class _GoalScreenState extends State<GoalScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 93),
-                // 전달받은 이름 표시!
                 Text(
                   'Welcome!\n${widget.name}.',
                   style: const TextStyle(
@@ -170,7 +135,7 @@ class _GoalScreenState extends State<GoalScreen> {
                   height: 52,
                   child: ElevatedButton(
                     onPressed: (_selectedGoal != null && !_isLoading)
-                        ? _handleContinue // ← 변경: Firebase 저장 로직 연결
+                        ? _handleContinue
                         : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.black,
@@ -214,7 +179,6 @@ class _GoalScreenState extends State<GoalScreen> {
     );
   }
 
-  // ---------- 목표 선택 카드 ----------
   Widget _buildGoalCard({
     required int index,
     required String title,
@@ -227,13 +191,13 @@ class _GoalScreenState extends State<GoalScreen> {
 
     return GestureDetector(
       onTap: _isLoading
-          ? null // 저장 중에는 카드 선택 변경 못 하게 막음
+          ? null
           : () {
               setState(() => _selectedGoal = index);
             },
       child: Container(
         width: double.infinity,
-        height: 110, // 카드 높이 — 이미지 비율 보고 조절
+        height: 110,
         decoration: BoxDecoration(
           image: DecorationImage(
             image: AssetImage(isSelected ? selectedImage : unselectedImage),

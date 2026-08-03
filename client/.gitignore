@@ -68,3 +68,4 @@ node_modules/
 
 # Firebase secrets (API keys should not be public)
 **/google-services.json
+**/.vscode/
