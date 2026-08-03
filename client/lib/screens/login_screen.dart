@@ -19,79 +19,67 @@ class LoginScreen extends StatelessWidget {
         height: double.infinity,
         decoration: const BoxDecoration(gradient: _gradient),
         child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 20),
-                        Image.asset(
-                          'assets/images/login_photos.png',
-                          width: double.infinity,
-                          height: 340,
-                          fit: BoxFit.contain,
-                        ),
-                        const SizedBox(height: 24),
-                        const Text(
-                          'Ready to run\nand clean?',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w700,
-                            fontSize: 32,
-                            height: 1.15,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text('Get started.', style: AppTextStyles.medium16),
-                        const SizedBox(height: 24),
-                        _SocialButton(
-                          iconPath: 'assets/images/icons/ic_apple.png',
-                          label: 'Continue with Apple',
-                          backgroundColor: Colors.black,
-                          textColor: Colors.white,
-                          onPressed: () {},
-                        ),
-                        const SizedBox(height: 12),
-                        _SocialButton(
-                          iconPath: 'assets/images/icons/ic_google.png',
-                          label: 'Continue with Google',
-                          backgroundColor: Colors.white,
-                          textColor: Colors.black,
-                          onPressed: () {},
-                        ),
-                        const SizedBox(height: 16),
-                        Center(
-                          child: GestureDetector(
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const SignupScreen(),
-                                ),
-                              );
-                            },
-                            child: const Text(
-                              'Or continue with email',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontWeight: FontWeight.w500,
-                                fontSize: 14,
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                      ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 20),
+                Image.asset(
+                  'assets/images/login_photos.png',
+                  width: double.infinity,
+                  height: 340,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Ready to run\nand clean?',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 32,
+                    height: 1.15,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text('Get started.', style: AppTextStyles.medium16),
+                const SizedBox(height: 24),
+                _SocialButton(
+                  iconPath: 'assets/images/icons/ic_apple.png',
+                  label: 'Continue with Apple',
+                  backgroundColor: Colors.black,
+                  textColor: Colors.white,
+                  onPressed: () {},
+                ),
+                const SizedBox(height: 12),
+                _SocialButton(
+                  iconPath: 'assets/images/icons/ic_google.png',
+                  label: 'Continue with Google',
+                  backgroundColor: Colors.white,
+                  textColor: Colors.black,
+                  onPressed: () {},
+                ),
+                const SizedBox(height: 16),
+                Center(
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SignupScreen()),
+                      );
+                    },
+                    child: const Text(
+                      'Or continue with email',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
                   ),
                 ),
-              );
-            },
+              ],
+            ),
           ),
         ),
       ),
