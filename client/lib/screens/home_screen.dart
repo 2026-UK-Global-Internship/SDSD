@@ -67,6 +67,107 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
+            // ---------- 활동 카드 (My activities this week) ----------
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFFBBF24), Color(0xFFF472B6)],
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 위치
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Camden, London',
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'My activities this week',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w500,
+                        fontSize: 15,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // 숫자들: 5 days / 7 cleans
+                    Row(
+                      children: [
+                        _buildStat('5', 'days'),
+                        const SizedBox(width: 40),
+                        _buildStat('7', 'cleans'),
+                        const Spacer(),
+                        const Icon(
+                          Icons.cleaning_services,
+                          color: Colors.white,
+                          size: 28,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // 진행바
+                    Row(
+                      children: [
+                        const Text(
+                          'Neighborhood Cleanliness',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w400,
+                            fontSize: 12,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const Spacer(),
+                        const Text(
+                          '75%',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: LinearProgressIndicator(
+                        value: 0.75, // 75%
+                        minHeight: 8,
+                        backgroundColor: Colors.white.withValues(alpha: 0.3),
+                        valueColor: const AlwaysStoppedAnimation(Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -95,6 +196,35 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
+    );
+  }
+
+  // 큰 숫자 + 작은 단위 (5 days, 7 cleans)
+  Widget _buildStat(String number, String unit) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(
+          number,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w900,
+            fontSize: 32,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          unit,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w500,
+            fontSize: 14,
+            color: Colors.white,
+          ),
+        ),
+      ],
     );
   }
 }
