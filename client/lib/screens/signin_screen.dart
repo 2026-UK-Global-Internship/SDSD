@@ -108,9 +108,9 @@ class _SigninScreenState extends State<SigninScreen> {
         ).push(MaterialPageRoute(builder: (_) => NameScreen()));
       } else {
         // 기존 사용자 → 바로 홈 화면
-        // TODO: 실제 홈 화면이 만들어지면 아래 주석을 해제하고 경로를 맞춰주세요.
-        // Navigator.of(context).pushReplacementNamed('/home');
-        _showSuccessSnackBar('Google 로그인 성공했습니다!');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen(name: 'User')),
+        );
       }
     } catch (e) {
       // 실패 → 오류 메시지 표시
