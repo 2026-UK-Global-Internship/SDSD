@@ -1,5 +1,7 @@
+//goal_screen.dart
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
+import 'package:sdsd/server/services/auth_service.dart';
 
 class GoalScreen extends StatefulWidget {
   const GoalScreen({super.key, required this.name});
@@ -11,13 +13,64 @@ class GoalScreen extends StatefulWidget {
 }
 
 class _GoalScreenState extends State<GoalScreen> {
-  int? _selectedGoal; // null = 아직 선택 안 함, 0/1/2 = 선택한 카드
+  int? _selectedGoal;
+  bool _isLoading = false;
+
+  final AuthService _authService = AuthService();
+
+  static const List<String> _goalValues = ['beginner', 'regular', 'ecoHero'];
 
   static const _gradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
     colors: [Color(0xFFFBBF24), Color(0xFFF472B6)],
   );
+
+  Future<void> _handleContinue() async {
+    if (_selectedGoal == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final uid = _authService.currentUserId;
+
+      if (uid == null) {
+        throw Exception('로그인된 사용자가 없습니다');
+      }
+
+      final goalValue = _goalValues[_selectedGoal!];
+
+      await _authService.updateWeeklyGoal(uid, goalValue);
+      await _authService.completeOnboarding(uid);
+
+      // 저장 성공 → 홈 화면으로 이동
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => HomeScreen(name: widget.name)),
+        );
+      }
+    } catch (e) {
+      _showErrorSnackBar(e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red[600],
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +84,6 @@ class _GoalScreenState extends State<GoalScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 93),
-                // 전달받은 이름 표시!
                 Text(
                   'Welcome!\n${widget.name}.',
                   style: const TextStyle(
@@ -82,14 +134,8 @@ class _GoalScreenState extends State<GoalScreen> {
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: _selectedGoal != null
-                        ? () {
-                            Navigator.of(context).pushReplacement(
-                              MaterialPageRoute(
-                                builder: (_) => HomeScreen(name: widget.name),
-                              ),
-                            );
-                          }
+                    onPressed: (_selectedGoal != null && !_isLoading)
+                        ? _handleContinue
                         : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.black,
@@ -100,17 +146,28 @@ class _GoalScreenState extends State<GoalScreen> {
                         borderRadius: BorderRadius.circular(26),
                       ),
                     ),
-                    child: Text(
-                      'Continue',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 18,
-                        color: _selectedGoal != null
-                            ? Colors.white
-                            : Colors.white.withValues(alpha: 0.7),
-                      ),
-                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                        : Text(
+                            'Continue',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.w600,
+                              fontSize: 18,
+                              color: _selectedGoal != null
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: 0.7),
+                            ),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 40),
@@ -122,7 +179,6 @@ class _GoalScreenState extends State<GoalScreen> {
     );
   }
 
-  // ---------- 목표 선택 카드 ----------
   Widget _buildGoalCard({
     required int index,
     required String title,
@@ -134,12 +190,14 @@ class _GoalScreenState extends State<GoalScreen> {
     final bool isSelected = _selectedGoal == index;
 
     return GestureDetector(
-      onTap: () {
-        setState(() => _selectedGoal = index);
-      },
+      onTap: _isLoading
+          ? null
+          : () {
+              setState(() => _selectedGoal = index);
+            },
       child: Container(
         width: double.infinity,
-        height: 110, // 카드 높이 — 이미지 비율 보고 조절
+        height: 110,
         decoration: BoxDecoration(
           image: DecorationImage(
             image: AssetImage(isSelected ? selectedImage : unselectedImage),

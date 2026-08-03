@@ -1,3 +1,4 @@
+//auth_service.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -86,7 +87,10 @@ class AuthService {
   // ==========================================
   // Google 로그인 (신규 가입 + 로그인)
   // ==========================================
-  Future<void> signInWithGoogle() async {
+  // 반환값: true면 "이번에 처음 가입한 신규 사용자", false면 "기존 사용자 로그인"
+  // ← 변경: void에서 bool로 변경. 화면(UI)에서 신규/기존에 따라
+  //         다른 화면으로 이동시켜야 하므로 이 정보가 필요합니다.
+  Future<bool> signInWithGoogle() async {
     try {
       // 1. Google 로그인
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
@@ -123,6 +127,8 @@ class AuthService {
       } else {
         print('✓ Google 로그인 성공: ${userCredential.user!.uid}');
       }
+
+      return isNewUser; // ← 변경: 호출한 쪽(UI)에 결과 전달
     } on FirebaseAuthException catch (e) {
       throw Exception('Google 인증 실패: ${e.message}');
     } catch (e) {
@@ -201,11 +207,54 @@ class AuthService {
   }
 
   // ==========================================
+  // 온보딩 완료 처리  ← 추가된 부분 ①
+  // ==========================================
+  // GoalScreen에서 weeklyGoal 저장까지 성공한 직후 호출합니다.
+  // 이걸 호출해야만 다음 로그인부터 "온보딩 끝난 사용자"로 인식됩니다.
+  Future<void> completeOnboarding(String uid) async {
+    try {
+      await _firestore.collection('users').doc(uid).update({
+        'onboardingComplete': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      print('✓ 온보딩 완료 처리: $uid');
+    } catch (e) {
+      throw Exception('온보딩 완료 처리 실패: $e');
+    }
+  }
+
+  // ==========================================
+  // 온보딩 완료 여부 확인  ← 추가된 부분 ②
+  // ==========================================
+  // 로그인 성공 직후 이 함수로 확인해서,
+  // false면 온보딩 화면으로, true면 홈 화면으로 보내면 됩니다.
+  Future<bool> checkOnboardingComplete(String uid) async {
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get();
+
+      if (!doc.exists) {
+        // 문서가 아예 없다는 건 비정상 상태이므로,
+        // 안전하게 "온보딩 안 끝남"으로 취급합니다.
+        return false;
+      }
+
+      final data = doc.data() as Map<String, dynamic>;
+
+      // 예전에 만들어진 계정(필드 자체가 없는 경우)도 있을 수 있으므로
+      // 기본값을 false로 지정해둡니다 (필드 없으면 온보딩 안 된 것으로 간주).
+      return data['onboardingComplete'] ?? false;
+    } catch (e) {
+      throw Exception('온보딩 상태 확인 실패: $e');
+    }
+  }
+
+  // ==========================================
   // weeklyGoal 업데이트
   // ==========================================
   Future<void> updateWeeklyGoal(String uid, String goal) async {
     try {
-      if (!['beginner', 'intermediate', 'advanced'].contains(goal)) {
+      if (!['beginner', 'regular', 'ecoHero'].contains(goal)) {
         throw Exception('올바른 목표 수준을 선택해주세요');
       }
 
@@ -269,6 +318,10 @@ class AuthService {
           'raise': {'pet': 0, 'feed': 0},
         },
         'reservedHotspotId': null,
+        // 온보딩(이름 → username → weeklyGoal 설정)을 끝까지 마쳤는지 여부  ← 추가된 부분 ③
+        // 회원가입 직후에는 항상 false이며, GoalScreen에서 목표 저장이
+        // 성공한 시점에만 completeOnboarding()을 통해 true로 바뀝니다.
+        'onboardingComplete': false,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
