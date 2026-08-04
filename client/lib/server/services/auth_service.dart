@@ -271,26 +271,6 @@ class AuthService {
   }
 
   // ==========================================
-  // 캐릭터 색상 변경
-  // ==========================================
-  Future<void> updateCharacterColor(String uid, String color) async {
-    try {
-      if (!color.startsWith('#') || color.length != 7) {
-        throw Exception('올바른 HEX 색상을 입력해주세요 (예: #FF5733)');
-      }
-
-      await _firestore.collection('users').doc(uid).update({
-        'character.color': color,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      print('✓ 캐릭터 색상 변경: $color');
-    } catch (e) {
-      throw Exception('색상 변경 실패: $e');
-    }
-  }
-
-  // ==========================================
   // 비공개 헬퍼 함수: Users 문서 생성
   // ==========================================
   Future<void> _createUserDocument(
