@@ -1,4 +1,5 @@
 //goal_screen.dart
+import 'character_color_screen.dart';
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'package:sdsd/server/services/auth_service.dart';
@@ -48,7 +49,9 @@ class _GoalScreenState extends State<GoalScreen> {
       // 저장 성공 → 홈 화면으로 이동
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => HomeScreen(name: widget.name)),
+          MaterialPageRoute(
+            builder: (_) => CharacterColorScreen(name: widget.name),
+          ),
         );
       }
     } catch (e) {

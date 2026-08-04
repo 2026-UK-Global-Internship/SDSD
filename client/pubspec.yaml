@@ -27,6 +27,7 @@ dependencies:
     shared_preferences: ^2.5.5 # 세션/로그인 토큰 저장
     firebase_core: ^4.12.1
     google_sign_in: ^6.2.0
+    flutter_colorpicker: ^1.1.0
 dev_dependencies:
     flutter_test:
         sdk: flutter

@@ -4,6 +4,7 @@ import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
 import 'package:sdsd/server/services/auth_service.dart';
 import 'screens/home_screen.dart';
+import 'screens/character_color_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,6 +50,7 @@ class MyApp extends StatelessWidget {
       ),
       home: const SplashScreen(),
       //home: const HomeScreen(name: 'Alan'),
+      //home: const CharacterColorScreen(name: 'Alan'),
     );
   }
 }
