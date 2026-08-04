@@ -197,6 +197,7 @@ class AuthService {
 
       await _firestore.collection('users').doc(uid).update({
         'displayName': newName,
+        'displayNameLower': newName.toLowerCase(), // ★ 추가: 검색용 소문자 필드
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -207,7 +208,7 @@ class AuthService {
   }
 
   // ==========================================
-  // 온보딩 완료 처리  ← 추가된 부분 ①
+  // 온보딩 완료 처리
   // ==========================================
   // GoalScreen에서 weeklyGoal 저장까지 성공한 직후 호출합니다.
   // 이걸 호출해야만 다음 로그인부터 "온보딩 끝난 사용자"로 인식됩니다.
@@ -225,7 +226,7 @@ class AuthService {
   }
 
   // ==========================================
-  // 온보딩 완료 여부 확인  ← 추가된 부분 ②
+  // 온보딩 완료 여부 확인
   // ==========================================
   // 로그인 성공 직후 이 함수로 확인해서,
   // false면 온보딩 화면으로, true면 홈 화면으로 보내면 됩니다.
@@ -309,6 +310,7 @@ class AuthService {
       // 새 사용자 문서 생성
       await _firestore.collection('users').doc(uid).set({
         'displayName': displayName,
+        'displayNameLower': displayName.toLowerCase(), // ★ 추가: 검색용 소문자 필드
         'email': email,
         'weeklyGoal': 'beginner',
         'character': {
@@ -318,7 +320,7 @@ class AuthService {
           'raise': {'pet': 0, 'feed': 0},
         },
         'reservedHotspotId': null,
-        // 온보딩(이름 → username → weeklyGoal 설정)을 끝까지 마쳤는지 여부  ← 추가된 부분 ③
+        // 온보딩(이름 → username → weeklyGoal 설정)을 끝까지 마쳤는지 여부
         // 회원가입 직후에는 항상 false이며, GoalScreen에서 목표 저장이
         // 성공한 시점에만 completeOnboarding()을 통해 true로 바뀝니다.
         'onboardingComplete': false,
