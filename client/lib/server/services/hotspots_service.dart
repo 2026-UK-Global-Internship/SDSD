@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'character_service.dart';
 
 class HotspotService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final CharacterService _characterService = CharacterService();
 
   // ==========================================
   // 1. Hotspot 신고 (쓰레기 위치 등록)
@@ -221,7 +223,10 @@ class HotspotService {
   // Security Rules의 validate_hotspot_update() 규칙:
   //   oldStatus == "reserved" && newStatus == "cleaned"
   //   && 현재 uid == reservedBy  일 때만 허용
-  Future<void> completeCleaning(String hotspotId) async {
+  // 반환값 변경 안내: void → Map<String, dynamic>
+  //   화면에서 "레벨업 했는지(leveledUp)"를 바로 알 수 있게 하기 위함입니다.
+  //   (예: 레벨업 시 축하 팝업을 띄우는 등의 UI 반응에 활용)
+  Future<Map<String, dynamic>> completeCleaning(String hotspotId) async {
     try {
       final currentUser = _auth.currentUser;
       if (currentUser == null) {
@@ -250,6 +255,17 @@ class HotspotService {
       });
 
       print('✓ 청소 완료 처리 성공: $hotspotId');
+
+      // ★ 연결: 청소 완료 보상 = "쓰다듬기 기회" 1개 지급
+      //   XP는 여기서 바로 주지 않고, 사용자가 나중에 실제로
+      //   CharacterService.petCharacter()를 호출해 이 기회를 "사용"할 때 XP가 들어갑니다.
+      await _characterService.grantOpportunity(
+        currentUser.uid,
+        type: 'pet',
+        amount: 1,
+      );
+
+      return {'hotspotId': hotspotId, 'petChanceGranted': 1};
     } catch (e) {
       throw Exception('청소 완료 처리 실패: $e');
     }
