@@ -19,9 +19,9 @@ class _GoalScreenState extends State<GoalScreen> {
   int? _selectedGoal;
   static const List<String> _goalValues = ['beginner', 'regular', 'ecoHero'];
 
-  // 페이지 2: 색 선택
-  Color _selectedColor = Colors.black; // 기본은 검정 Dusty
-  bool _showPalette = false; // 톱니바퀴 토글: 팔레트 보이기/숨기기
+  // 페이지 2: 색 선택 (초기값 null로 설정하여 미선택 상태 구분)
+  Color? _selectedColor;
+  bool _showPalette = false;
 
   bool _isLoading = false;
   final AuthService _authService = AuthService();
@@ -38,17 +38,15 @@ class _GoalScreenState extends State<GoalScreen> {
     super.dispose();
   }
 
-  // 다음 버튼 눌렀을 때
   void _onContinue() {
     if (_currentPage == 0) {
-      // 페이지 1 → 페이지 2
       if (_selectedGoal == null) return;
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
     } else {
-      // 페이지 2 → Firebase 저장 + 홈 이동
+      if (_selectedColor == null) return;
       _finishOnboarding();
     }
   }
@@ -62,7 +60,6 @@ class _GoalScreenState extends State<GoalScreen> {
       final goalValue = _goalValues[_selectedGoal!];
       await _authService.updateWeeklyGoal(uid, goalValue);
       await _authService.completeOnboarding(uid);
-      // TODO: 나중에 색상도 Firebase에 저장
 
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -85,10 +82,10 @@ class _GoalScreenState extends State<GoalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 다음 버튼 활성화 조건
+    // 페이지별 활성화 상태 조건 정의
     final bool canContinue = _currentPage == 0
         ? _selectedGoal != null
-        : true; // 색 선택은 기본값이 있으니 항상 활성화
+        : _selectedColor != null; // 2페이지는 색을 클릭해서 지정해야 활성화
 
     return Scaffold(
       body: Container(
@@ -96,22 +93,22 @@ class _GoalScreenState extends State<GoalScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // 스와이프 되는 페이지 영역
               Expanded(
                 child: PageView(
                   controller: _pageController,
+                  physics:
+                      const NeverScrollableScrollPhysics(), // 뒤로가기 버튼 컨트롤을 위해 스와이프 차단 시 유용
                   onPageChanged: (index) {
                     setState(() => _currentPage = index);
                   },
                   children: [_buildGoalPage(), _buildColorPage()],
                 ),
               ),
-              // 하단: 점 인디케이터 + Continue 버튼
+              // 하단 인디케이터 + Continue 버튼
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
                 child: Column(
                   children: [
-                    // 점 인디케이터
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: List.generate(2, (i) {
@@ -129,21 +126,24 @@ class _GoalScreenState extends State<GoalScreen> {
                       }),
                     ),
                     const SizedBox(height: 20),
-                    // Continue 버튼
                     SizedBox(
                       width: double.infinity,
-                      height: 52,
+                      height: 54,
                       child: ElevatedButton(
                         onPressed: (canContinue && !_isLoading)
                             ? _onContinue
                             : null,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.black,
+                          // 활성화 시 검정, 미선택 시 opacity 50% 검정 적용
+                          backgroundColor: canContinue
+                              ? Colors.black
+                              : Colors.black.withValues(alpha: 0.5),
                           disabledBackgroundColor: Colors.black.withValues(
-                            alpha: 0.35,
+                            alpha: 0.5,
                           ),
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(26),
+                            borderRadius: BorderRadius.circular(27),
                           ),
                         ),
                         child: _isLoading
@@ -185,14 +185,14 @@ class _GoalScreenState extends State<GoalScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 60),
+          const SizedBox(height: 120),
           Text(
             'Welcome!\n${widget.name}.',
             style: const TextStyle(
               fontFamily: 'Inter',
               fontWeight: FontWeight.w700,
               fontSize: 40,
-              height: 1,
+              height: 1.1,
             ),
           ),
           const SizedBox(height: 8),
@@ -201,7 +201,7 @@ class _GoalScreenState extends State<GoalScreen> {
             style: TextStyle(
               fontFamily: 'Inter',
               fontWeight: FontWeight.w500,
-              fontSize: 20,
+              fontSize: 18,
             ),
           ),
           const SizedBox(height: 32),
@@ -301,7 +301,18 @@ class _GoalScreenState extends State<GoalScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 60),
+          const SizedBox(height: 20),
+          // 뒤로가기 (페이지 1로)
+          GestureDetector(
+            onTap: () {
+              _pageController.previousPage(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            },
+            child: const Icon(Icons.arrow_back_ios, size: 24),
+          ),
+          const SizedBox(height: 32),
           const Text(
             "Choose Dusty's\ncolor.",
             style: TextStyle(
@@ -321,51 +332,36 @@ class _GoalScreenState extends State<GoalScreen> {
             ),
           ),
           const SizedBox(height: 40),
-          // Dusty + 톱니바퀴
+          // Dusty 영역 (팔레트 or 캐릭터)
           Expanded(
             child: Stack(
-              alignment: Alignment.center,
+              alignment: Alignment.topCenter,
               children: [
-                // Dusty (색 입힌 몸통 + 눈)
-                _buildDusty(),
-                // 톱니바퀴 (오른쪽 위)
+                // 팔레트 (톱니바퀴 누르면 위쪽에 뜸)
+                if (_showPalette)
+                  Positioned(top: 0, left: 0, right: 0, child: _buildPalette()),
+                // Dusty (가운데 정렬)
+                Align(
+                  alignment: _showPalette
+                      ? Alignment.bottomCenter
+                      : Alignment.center,
+                  child: _buildDusty(),
+                ),
+                // 톱니바퀴 (Dusty 오른쪽 위)
                 Positioned(
-                  top: 20,
+                  top: _showPalette ? 240 : 40, // 팔레트 있으면 아래로
                   right: 20,
                   child: GestureDetector(
                     onTap: () {
                       setState(() => _showPalette = !_showPalette);
                     },
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.settings,
-                        size: 22,
-                        color: Colors.black87,
-                      ),
+                    child: const Icon(
+                      Icons.settings,
+                      size: 32,
+                      color: Colors.black87,
                     ),
                   ),
                 ),
-                // 팔레트 (톱니바퀴 눌렀을 때만)
-                if (_showPalette)
-                  Positioned(
-                    top: 80,
-                    left: 0,
-                    right: 0,
-                    child: _buildPalette(),
-                  ),
               ],
             ),
           ),
@@ -374,75 +370,93 @@ class _GoalScreenState extends State<GoalScreen> {
     );
   }
 
-  // 색 입힌 Dusty (몸통 + 눈 겹침)
   Widget _buildDusty() {
-    // 기본 검정이면 default 이미지 그대로, 색 있으면 흰 밑판에 색 입히기
-    if (_selectedColor == Colors.black) {
-      return Image.asset('assets/images/dusty_default.png', width: 240);
+    // null이거나 검정이면 기본 Dusty
+    if (_selectedColor == null || _selectedColor == const Color(0xFF000000)) {
+      return Image.asset(
+        'assets/images/dusty_default.png',
+        width: 231,
+        height: 221,
+      );
     }
     return Stack(
       alignment: Alignment.center,
       children: [
-        // 색 입힌 몸통
         ColorFiltered(
-          colorFilter: ColorFilter.mode(_selectedColor, BlendMode.srcIn),
-          child: Image.asset('assets/images/dusty_body.png', width: 240),
+          colorFilter: ColorFilter.mode(_selectedColor!, BlendMode.srcIn),
+          child: Image.asset(
+            'assets/images/dusty_body.png',
+            width: 231,
+            height: 221,
+          ),
         ),
-        // 눈 (색 위에 겹침)
-        Image.asset('assets/images/dusty_eyes.png', width: 240),
+        Image.asset('assets/images/dusty_eyes.png', width: 231, height: 221),
       ],
     );
   }
 
-  // 색 팔레트 (간단한 격자)
+  // 색 팔레트 (피그마 격자식)
   Widget _buildPalette() {
-    final colors = [
-      Colors.black,
+    // 각 행: 하나의 색조가 명도별로 세로 배치
+    // 열: 다양한 색조 (빨→노→초→파→보 등)
+    final List<Color> hues = [
       Colors.red,
       Colors.orange,
+      Colors.amber,
       Colors.yellow,
+      Colors.lime,
       Colors.green,
+      Colors.teal,
+      Colors.cyan,
       Colors.blue,
       Colors.indigo,
       Colors.purple,
       Colors.pink,
       Colors.brown,
-      Colors.teal,
-      Colors.cyan,
+      Colors.grey,
     ];
+    // 명도 (밝은 것 → 어두운 것)
+    final List<double> lightness = [0.9, 0.75, 0.6, 0.45, 0.3, 0.15];
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 12,
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        alignment: WrapAlignment.center,
-        children: colors.map((color) {
-          final isSelected = _selectedColor == color;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedColor = color),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSelected ? Colors.black : Colors.transparent,
-                  width: 3,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: lightness.map((l) {
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: hues.map((hue) {
+              // HSL로 명도 조절해서 격자 색 만들기
+              final hsl = HSLColor.fromColor(hue).withLightness(l);
+              final color = hsl.toColor();
+              final isSelected = _selectedColor == color;
+              return GestureDetector(
+                onTap: () => setState(() => _selectedColor = color),
+                child: Container(
+                  width: 20,
+                  height: 20,
+                  margin: const EdgeInsets.all(1),
+                  decoration: BoxDecoration(
+                    color: color,
+                    border: Border.all(
+                      color: isSelected ? Colors.white : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            }).toList(),
           );
         }).toList(),
       ),
