@@ -133,42 +133,31 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 8),
                         Text('Get started.', style: AppTextStyles.medium16),
                         const SizedBox(height: 24),
-                        // Apple 버튼 (구글 로딩 중엔 비활성화만 추가, 기능은 그대로 TODO)
                         _SocialButton(
                           iconPath: 'assets/images/icons/ic_apple.png',
                           label: 'Continue with Apple',
                           backgroundColor: Colors.black,
                           textColor: Colors.white,
-                          onPressed: _isGoogleLoading
-                              ? null
-                              : () {
-                                  // TODO: Apple 로그인
-                                },
+                          onPressed: () {},
                         ),
                         const SizedBox(height: 12),
-                        // Google 버튼 (실제 로직 연결)
                         _SocialButton(
                           iconPath: 'assets/images/icons/ic_google.png',
                           label: 'Continue with Google',
                           backgroundColor: Colors.white,
                           textColor: Colors.black,
-                          isLoading: _isGoogleLoading, // ← 추가: 로딩 중이면 스피너 표시
-                          onPressed: _isGoogleLoading
-                              ? null
-                              : _handleGoogleSignIn, // ← 변경: 실제 로직 연결
+                          onPressed: () {},
                         ),
                         const SizedBox(height: 16),
                         Center(
                           child: GestureDetector(
-                            onTap: _isGoogleLoading
-                                ? null
-                                : () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => const SignupScreen(),
-                                      ),
-                                    );
-                                  },
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const SignupScreen(),
+                                ),
+                              );
+                            },
                             child: const Text(
                               'Or continue with email',
                               style: TextStyle(
