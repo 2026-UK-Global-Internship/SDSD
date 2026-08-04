@@ -1,4 +1,3 @@
-//hotspots_screen.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -135,6 +134,16 @@ class HotspotService {
         throw Exception('이미 예약되었거나 청소 완료된 위치입니다');
       }
 
+      // ★ 추가: 이미 다른 hotspot을 예약 중인지 확인 (한 번에 하나만 예약 가능)
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+      final existingReservation = userDoc.data()?['reservedHotspotId'];
+      if (existingReservation != null) {
+        throw Exception('이미 예약 중인 위치가 있습니다. 먼저 청소를 완료하거나 취소해주세요');
+      }
+
       // Firestore Transaction 사용: 동시에 여러 명이 예약 시도해도 안전하게 처리
       await _firestore.runTransaction((transaction) async {
         final docRef = _firestore.collection('hotspots').doc(hotspotId);
@@ -167,7 +176,47 @@ class HotspotService {
   }
 
   // ==========================================
-  // 6. 청소 완료 처리 (reserved → cleaned)
+  // 6. 예약 취소 (reserved → open)
+  // ==========================================
+  // Security Rules에 아래 reservedToOpen 케이스를 추가해야 동작합니다:
+  //   oldStatus == "reserved" && newStatus == "open"
+  //   && 현재 uid == 기존 reservedBy && 새 reservedBy == null
+  Future<void> cancelReservation(String hotspotId) async {
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('로그인이 필요합니다');
+      }
+
+      final hotspot = await getHotspotById(hotspotId);
+
+      if (hotspot['status'] != 'reserved') {
+        throw Exception('예약된 상태가 아닙니다');
+      }
+
+      if (hotspot['reservedBy'] != currentUser.uid) {
+        throw Exception('본인이 예약한 Hotspot만 취소할 수 있습니다');
+      }
+
+      await _firestore.runTransaction((transaction) async {
+        final docRef = _firestore.collection('hotspots').doc(hotspotId);
+
+        // 1. hotspots 문서 업데이트: reserved → open, reservedBy 초기화
+        transaction.update(docRef, {'status': 'open', 'reservedBy': null});
+
+        // 2. users 문서의 예약 상태 해제
+        final userRef = _firestore.collection('users').doc(currentUser.uid);
+        transaction.update(userRef, {'reservedHotspotId': null});
+      });
+
+      print('✓ 예약 취소 성공: $hotspotId');
+    } catch (e) {
+      throw Exception('예약 취소 실패: $e');
+    }
+  }
+
+  // ==========================================
+  // 7. 청소 완료 처리 (reserved → cleaned)
   // ==========================================
   // Security Rules의 validate_hotspot_update() 규칙:
   //   oldStatus == "reserved" && newStatus == "cleaned"
@@ -207,7 +256,7 @@ class HotspotService {
   }
 
   // ==========================================
-  // 7. Hotspot 삭제 (신고자만 가능)
+  // 8. Hotspot 삭제 (신고자만 가능)
   // ==========================================
   Future<void> deleteHotspot(String hotspotId) async {
     try {
