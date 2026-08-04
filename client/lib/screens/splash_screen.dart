@@ -6,6 +6,7 @@ import 'package:sdsd/server/services/auth_service.dart';
 import 'onboarding_screen.dart';
 import 'name_screen.dart';
 import 'login_screen.dart';
+import '../screens/home_screen.dart'; // ← 추가: 실제 홈 화면
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -61,13 +62,24 @@ class _SplashScreenState extends State<SplashScreen> {
     // 2. 로그인은 되어 있음 → 프로필 설정(이름/username/goal)까지 끝냈는지 확인
     try {
       final uid = _authService.currentUserId!;
-      final bool isComplete = await _authService.checkOnboardingComplete(uid);
+
+      // .timeout(): 5초 안에 응답이 없으면 강제로 실패 처리
+      // (네트워크 문제로 Firestore 응답이 영영 안 오는 상황을 방지)
+      final bool isComplete = await _authService
+          .checkOnboardingComplete(uid)
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => throw Exception('네트워크 응답 시간 초과'),
+          );
 
       if (isComplete) {
-        // 프로필 설정까지 끝난 기존 사용자 → 홈 화면
-        // TODO: 실제 홈 화면이 만들어지면 아래를 교체하세요.
-        //       예: return const HomeScreen();
-        return const _PlaceholderHomeScreen();
+        // 프로필 설정까지 끝난 기존 사용자 → 실제 홈 화면으로 이동
+        // login_screen.dart의 기존 유저 처리와 동일한 방식:
+        // Firestore에서 이름을 가져와 HomeScreen에 전달합니다.
+        final profile = await _authService.getUserProfile(uid);
+        final displayName = profile['displayName'] as String? ?? 'User';
+
+        return HomeScreen(name: displayName);
       } else {
         // 로그인은 했지만 이름/username/goal 설정을 안 끝낸 사용자
         // → 캐러셀은 건너뛰고 바로 프로필 설정 화면으로 이어서 진행
@@ -103,49 +115,6 @@ class _SplashScreenState extends State<SplashScreen> {
               style: AppTextStyles.medium16.copyWith(
                 fontStyle: FontStyle.italic,
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ==========================================
-// 임시 홈 화면 (진짜 홈 화면이 만들어지기 전까지 사용)
-// ==========================================
-// 왜 필요한가?
-//   지금 "로그인 + 온보딩 완료" 상태를 테스트하려고 해도,
-//   실제 홈 화면이 없으면 이 상태를 확인할 방법이 없습니다.
-//   로그아웃 버튼을 눌러 처음부터 다시 테스트할 수 있도록
-//   최소한의 화면만 만들어뒀습니다.
-//
-// 실제 홈 화면이 만들어지면 이 클래스는 삭제하고
-// 위 _resolveNextScreen()의 TODO 부분을 교체하면 됩니다.
-class _PlaceholderHomeScreen extends StatelessWidget {
-  const _PlaceholderHomeScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('홈 (구현 예정)')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text('로그인 + 온보딩 완료 상태입니다.'),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () async {
-                await AuthService().signOut();
-                if (context.mounted) {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    (route) => false, // 이전 화면 스택 전부 제거
-                  );
-                }
-              },
-              child: const Text('로그아웃 (테스트용)'),
             ),
           ],
         ),
