@@ -131,7 +131,66 @@ class CharacterService {
   }
 
   // ==========================================
-  // 2. Hotspot 청소 완료 등 "보상"으로 기회를 지급
+  // 2. XP 직접 추가 (기회 시스템을 거치지 않는 즉시 보상용)
+  // ==========================================
+  // Flogging의 걸음수 기반 보상처럼, "기회를 모았다가 나중에 쓰는" 방식이 아니라
+  // 즉시 XP를 지급해야 하는 경우에 사용합니다.
+  //
+  // Transaction을 쓰는 이유:
+  //   Hotspot 청소완료(기회 지급)와 거의 동시에 Flogging 종료(즉시 XP)처럼
+  //   여러 요청이 겹칠 수 있습니다. Transaction 없이 단순히 읽고-계산하고-쓰면,
+  //   나중에 쓴 요청이 먼저 쓴 XP를 덮어써서 사라지는 버그가 생깁니다.
+  Future<Map<String, dynamic>> addXp(String uid, int amount) async {
+    if (amount <= 0) {
+      throw Exception('추가할 XP는 0보다 커야 합니다');
+    }
+
+    try {
+      final result = await _firestore.runTransaction<Map<String, dynamic>>((
+        transaction,
+      ) async {
+        final userRef = _firestore.collection('users').doc(uid);
+        final snapshot = await transaction.get(userRef);
+
+        if (!snapshot.exists) {
+          throw Exception('사용자를 찾을 수 없습니다');
+        }
+
+        final character = snapshot.data()!['character'] as Map<String, dynamic>;
+
+        final calc = _calculateXpAndLevel(
+          currentLevel: character['level'] as int,
+          currentXp: character['xp'] as int,
+          xpToAdd: amount,
+        );
+
+        transaction.update(userRef, {
+          'character.level': calc['level'],
+          'character.xp': calc['xp'],
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        return {
+          'newLevel': calc['level'],
+          'newXp': calc['xp'],
+          'leveledUp': calc['levelUpCount']! > 0,
+          'levelUpCount': calc['levelUpCount'],
+        };
+      });
+
+      print(
+        '✓ XP 추가 완료: +$amount '
+        '(레벨업: ${result['levelUpCount']}회, 현재 Lv.${result['newLevel']})',
+      );
+
+      return result;
+    } catch (e) {
+      throw Exception('XP 추가 실패: $e');
+    }
+  }
+
+  // ==========================================
+  // 3. Hotspot 청소 완료 등 "보상"으로 기회를 지급
   // ==========================================
   // XP를 직접 주지 않고, 나중에 사용자가 실제로 상호작용(먹이주기/쓰다듬기)을
   // "소모"할 때 비로소 XP가 들어가는 구조입니다.
@@ -165,7 +224,7 @@ class CharacterService {
   }
 
   // ==========================================
-  // 3. 캐릭터 색상 변경
+  // 4. 캐릭터 색상 변경
   // ==========================================
   Future<void> updateCharacterColor(String uid, String color) async {
     try {
@@ -185,7 +244,7 @@ class CharacterService {
   }
 
   // ==========================================
-  // 4. 먹이주기 (feed 기회 1개 소모 → XP 획득)
+  // 5. 먹이주기 (feed 기회 1개 소모 → XP 획득)
   // ==========================================
   Future<Map<String, dynamic>> feedCharacter(String uid) async {
     try {
@@ -261,7 +320,7 @@ class CharacterService {
   }
 
   // ==========================================
-  // 5. 쓰다듬기 (pet 기회 1개 소모 → XP 획득)
+  // 6. 쓰다듬기 (pet 기회 1개 소모 → XP 획득)
   // ==========================================
   // pet은 자동 충전이 없고, Hotspot 청소 등 "보상"으로만 얻습니다.
   Future<Map<String, dynamic>> petCharacter(String uid) async {

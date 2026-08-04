@@ -1,9 +1,17 @@
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/character_service.dart';
+import 'photo_upload_service.dart';
 
 class FloggingService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final CharacterService _characterService = CharacterService();
+  final PhotoUploadService _photoUploadService = PhotoUploadService();
+
+  // 조깅 XP 계산 기준 (가정값): 100걸음당 1 XP
+  int _calculateXpFromSteps(int steps) => steps ~/ 100;
 
   // ==========================================
   // 1. 조깅 기록 저장 (조깅이 끝난 시점에 한 번에 호출)
@@ -14,7 +22,9 @@ class FloggingService {
   //   조깅 종료 후 최종 데이터를 한 번에 저장하는 구조라는 의미입니다.
   //   (앱에서는 조깅 중 steps/calorie/경로를 로컬 변수에 쌓아뒀다가,
   //    "종료" 버튼을 누르면 이 함수를 1번 호출합니다)
-  Future<String> saveFloggingRecord({
+  // 반환값 변경 안내: String(floggingId만) → Map<String, dynamic>
+  //   floggingId뿐 아니라 XP 지급 결과(레벨업 여부 등)도 함께 반환하기 위함입니다.
+  Future<Map<String, dynamic>> saveFloggingRecord({
     required DateTime startedAt,
     required double startLatitude,
     required double startLongitude,
@@ -57,7 +67,21 @@ class FloggingService {
       });
 
       print('✓ 조깅 기록 저장 성공: ${docRef.id}');
-      return docRef.id;
+
+      // ★ 연결: 걸음수 기반으로 XP 지급
+      final xpToGain = _calculateXpFromSteps(steps);
+      Map<String, dynamic>? xpResult;
+      if (xpToGain > 0) {
+        xpResult = await _characterService.addXp(currentUser.uid, xpToGain);
+      }
+
+      return {
+        'floggingId': docRef.id,
+        'xpGained': xpToGain,
+        'newLevel': xpResult?['newLevel'],
+        'newXp': xpResult?['newXp'],
+        'leveledUp': xpResult?['leveledUp'] ?? false,
+      };
     } catch (e) {
       throw Exception('조깅 기록 저장 실패: $e');
     }
@@ -127,10 +151,12 @@ class FloggingService {
   //      HotspotService.completeCleaning()이 담당합니다.
   //      이 함수는 "그 청소가 이 조깅 세션에서 일어났다"는 연결 정보만
   //      flogging 문서에 남기는 역할입니다.
+  //
+  // 변경 안내: photoUrl(String?) → photoBytes(Uint8List?)로 변경됨
   Future<void> recordCleanup({
     required String floggingId,
     required String hotspotId,
-    String? photoUrl,
+    Uint8List? photoBytes,
   }) async {
     try {
       final currentUser = _auth.currentUser;
@@ -144,10 +170,22 @@ class FloggingService {
         throw Exception('본인의 조깅 기록에만 청소 정보를 연결할 수 있습니다');
       }
 
+      String photoUrl = '';
+      if (photoBytes != null) {
+        try {
+          photoUrl = await _photoUploadService.uploadCleanupPhoto(
+            floggingId: floggingId,
+            fileBytes: photoBytes,
+          );
+        } catch (e) {
+          print('⚠️ 사진 업로드 실패, 사진 없이 연결을 계속합니다: $e');
+        }
+      }
+
       await _firestore.collection('flogging').doc(floggingId).update({
         'cleanup': {
           'hotspotId': hotspotId,
-          'photoUrl': photoUrl ?? '', // Storage 미사용 중이므로 임시 URL 텍스트
+          'photoUrl': photoUrl,
           'cleanedAt': FieldValue.serverTimestamp(),
         },
       });
