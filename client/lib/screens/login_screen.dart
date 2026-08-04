@@ -73,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ==========================================
-  // SnackBar 표시 함수들
+  // SnackBar 표시 함수
   // ==========================================
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -81,16 +81,6 @@ class _LoginScreenState extends State<LoginScreen> {
         content: Text(message),
         backgroundColor: Colors.red[600],
         duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green[600],
-        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -133,7 +123,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   label: 'Continue with Apple',
                   backgroundColor: Colors.black,
                   textColor: Colors.white,
-                  onPressed: () {},
+                  onPressed: _isGoogleLoading
+                      ? null // 구글 로그인 처리 중엔 Apple 버튼도 비활성화
+                      : () {
+                          // TODO: Apple 로그인
+                        },
                 ),
                 const SizedBox(height: 12),
                 _SocialButton(
@@ -141,16 +135,23 @@ class _LoginScreenState extends State<LoginScreen> {
                   label: 'Continue with Google',
                   backgroundColor: Colors.white,
                   textColor: Colors.black,
-                  onPressed: () {},
+                  isLoading: _isGoogleLoading, // ← 추가: 로딩 중이면 스피너 표시
+                  onPressed: _isGoogleLoading
+                      ? null
+                      : _handleGoogleSignIn, // ← 변경: 실제 로직 연결
                 ),
                 const SizedBox(height: 16),
                 Center(
                   child: GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const SignupScreen()),
-                      );
-                    },
+                    onTap: _isGoogleLoading
+                        ? null
+                        : () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const SignupScreen(),
+                              ),
+                            );
+                          },
                     child: const Text(
                       'Or continue with email',
                       style: TextStyle(
