@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:sdsd/screens/goal_screen.dart';
+import 'package:sdsd/screens/map_screen.dart';
 import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
 import 'package:sdsd/server/services/auth_service.dart';
@@ -51,6 +53,8 @@ class MyApp extends StatelessWidget {
       home: const SplashScreen(),
       //home: const HomeScreen(name: 'Alan'),
       //home: const CharacterColorScreen(name: 'Alan'),
+      //home: GoalScreen(name: 'J'),
+      //home: MapScreen(),
     );
   }
 }
