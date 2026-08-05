@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'map_screen.dart';
 import 'package:sdsd/server/services/auth_service.dart';
 import 'splash_screen.dart';
+import 'camera_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.name});
@@ -58,8 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 1:
         return const MapScreen();
       case 4:
-        return _buildTempLogout(); // 임시 로그아웃 화면
-      // TODO: case 2 카메라, case 3 Dusty, case 4 프로필
+        return _buildTempLogout();
       default:
         return _buildHomePage();
     }
@@ -154,7 +154,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: GestureDetector(
                       onTap: () {
-                        // TODO: 쓰레기 신고 화면으로 이동
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const CameraScreen(),
+                          ),
+                        );
                       },
                       child: Image.asset('assets/images/btn_report_trash.png'),
                     ),
@@ -352,6 +357,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final bool isSelected = _currentTab == index;
     return GestureDetector(
       onTap: () {
+        // 카메라 탭(2)은 새 화면으로 push
+        if (index == 2) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const CameraScreen()),
+          );
+          return;
+        }
         setState(() {
           _currentTab = index;
         });
