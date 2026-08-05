@@ -1,5 +1,7 @@
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'character_service.dart';
 
 class HotspotService {
@@ -7,8 +9,34 @@ class HotspotService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final CharacterService _characterService = CharacterService();
 
+  static const String _photoBucket = 'photos';
+
   // 인원 규모로 선택 가능한 값 (밸런스/기획 조정 시 이 목록만 바꾸면 됨)
   static const List<String> _validCrewSizes = ['solo', 'duo', 'squad', 'more'];
+
+  // ==========================================
+  // 사진 업로드 (Supabase Storage) - 이 파일 안에서만 쓰는 내부 함수
+  // ==========================================
+  // 실패해도 예외를 던지지 않고 빈 문자열을 반환합니다.
+  // → 사진 업로드 문제 때문에 신고 자체가 막히지 않도록 하기 위함입니다.
+  Future<String> _uploadPhoto(String path, Uint8List bytes) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      await supabase.storage
+          .from(_photoBucket)
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: const FileOptions(cacheControl: '3600', upsert: true),
+          );
+
+      return supabase.storage.from(_photoBucket).getPublicUrl(path);
+    } catch (e) {
+      print('⚠️ 사진 업로드 실패, 사진 없이 계속 진행합니다: $e');
+      return '';
+    }
+  }
 
   // ==========================================
   // 1. Hotspot 신고 (쓰레기 위치 등록)
@@ -23,6 +51,7 @@ class HotspotService {
     required String trashType,
     required String locationDescription,
     required String crewSize,
+    Uint8List? photoBytes,
   }) async {
     try {
       final currentUser = _auth.currentUser;
@@ -53,9 +82,20 @@ class HotspotService {
         throw Exception('올바른 경도 값이 아닙니다 (-180 ~ 180)');
       }
 
-      final docRef = await _firestore.collection('hotspots').add({
+      // 문서 ID를 미리 확보 (사진 업로드 경로에 사용하기 위함)
+      final docRef = _firestore.collection('hotspots').doc();
+
+      String photoUrl = '';
+      if (photoBytes != null) {
+        photoUrl = await _uploadPhoto(
+          'hotspots/${docRef.id}/photo.jpg',
+          photoBytes,
+        );
+      }
+
+      await docRef.set({
         'reporterId': currentUser.uid,
-        'photoUrl': '', // 사진 업로드 기능은 아직 없음 (추후 추가 예정)
+        'photoUrl': photoUrl,
         'trashType': trashType,
         'locationDescription': trimmedDescription,
         'crewSize': crewSize,
