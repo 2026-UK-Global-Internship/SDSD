@@ -5,16 +5,28 @@ import 'splash_screen.dart';
 import 'camera_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.name});
-
+  const HomeScreen({
+    super.key,
+    required this.name,
+    this.initialTab = 0,
+    this.showMapToast = false, // ← 추가
+  });
   final String name;
+  final int initialTab; // 처음 열 때 어떤 탭 보여줄지 (0=홈, 1=지도, ...)
+  final bool showMapToast; // ← 추가: true면 지도 진입 시 "Report submitted!" 알림 표시
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentTab = 0;
+  late int _currentTab;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentTab = widget.initialTab;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +69,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildBody() {
     switch (_currentTab) {
       case 1:
-        return const MapScreen();
+        return MapScreen(
+          showSubmittedToast: widget.showMapToast,
+        ); // const 지우고 파라미터 전달
       case 4:
         return _buildTempLogout();
       default:
