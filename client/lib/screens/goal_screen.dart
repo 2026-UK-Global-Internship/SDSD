@@ -15,11 +15,9 @@ class _GoalScreenState extends State<GoalScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  // 페이지 1: 목표 선택
   int? _selectedGoal;
   static const List<String> _goalValues = ['beginner', 'regular', 'ecoHero'];
 
-  // 페이지 2: 색 선택 (초기값 null로 설정하여 미선택 상태 구분)
   Color? _selectedColor;
   bool _showPalette = false;
 
@@ -54,12 +52,12 @@ class _GoalScreenState extends State<GoalScreen> {
   Future<void> _finishOnboarding() async {
     setState(() => _isLoading = true);
     try {
-      final uid = _authService.currentUserId;
-      if (uid == null) throw Exception('로그인된 사용자가 없습니다');
-
-      final goalValue = _goalValues[_selectedGoal!];
-      await _authService.updateWeeklyGoal(uid, goalValue);
-      await _authService.completeOnboarding(uid);
+      // TODO: 나중에 Firebase랑 연동해야 함
+      // final uid = _authService.currentUserId;
+      // if (uid == null) throw Exception('로그인된 사용자가 없습니다');
+      // final goalValue = _goalValues[_selectedGoal!];
+      // await _authService.updateWeeklyGoal(uid, goalValue);
+      // await _authService.completeOnboarding(uid);
 
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -82,10 +80,9 @@ class _GoalScreenState extends State<GoalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 페이지별 활성화 상태 조건 정의
     final bool canContinue = _currentPage == 0
         ? _selectedGoal != null
-        : _selectedColor != null; // 2페이지는 색을 클릭해서 지정해야 활성화
+        : _selectedColor != null;
 
     return Scaffold(
       body: Container(
@@ -96,15 +93,13 @@ class _GoalScreenState extends State<GoalScreen> {
               Expanded(
                 child: PageView(
                   controller: _pageController,
-                  physics:
-                      const NeverScrollableScrollPhysics(), // 뒤로가기 버튼 컨트롤을 위해 스와이프 차단 시 유용
+                  physics: const NeverScrollableScrollPhysics(),
                   onPageChanged: (index) {
                     setState(() => _currentPage = index);
                   },
                   children: [_buildGoalPage(), _buildColorPage()],
                 ),
               ),
-              // 하단 인디케이터 + Continue 버튼
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 40),
                 child: Column(
@@ -134,7 +129,6 @@ class _GoalScreenState extends State<GoalScreen> {
                             ? _onContinue
                             : null,
                         style: ElevatedButton.styleFrom(
-                          // 활성화 시 검정, 미선택 시 opacity 50% 검정 적용
                           backgroundColor: canContinue
                               ? Colors.black
                               : Colors.black.withValues(alpha: 0.5),
@@ -301,8 +295,7 @@ class _GoalScreenState extends State<GoalScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 20),
-          // 뒤로가기 (페이지 1로)
+          const SizedBox(height: 100),
           GestureDetector(
             onTap: () {
               _pageController.previousPage(
@@ -313,92 +306,103 @@ class _GoalScreenState extends State<GoalScreen> {
             child: const Icon(Icons.arrow_back_ios, size: 24),
           ),
           const SizedBox(height: 32),
-          const Text(
-            "Choose Dusty's\ncolor.",
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w700,
-              fontSize: 40,
-              height: 1,
+
+          if (!_showPalette) ...[
+            const Text(
+              "Choose Dusty's\ncolor.",
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w700,
+                fontSize: 40,
+                height: 1,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Personalize your pet with a color.',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w500,
-              fontSize: 16,
+            const SizedBox(height: 8),
+            const Text(
+              'Personalize your pet with a color.',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w500,
+                fontSize: 16,
+              ),
             ),
-          ),
-          const SizedBox(height: 40),
-          // Dusty 영역 (팔레트 or 캐릭터)
+          ],
+
+          if (_showPalette) _buildPalette(),
+
+          const SizedBox(height: 24),
+
           Expanded(
-            child: Stack(
-              alignment: Alignment.topCenter,
-              children: [
-                // 팔레트 (톱니바퀴 누르면 위쪽에 뜸)
-                if (_showPalette)
-                  Positioned(top: 0, left: 0, right: 0, child: _buildPalette()),
-                // Dusty (가운데 정렬)
-                Align(
-                  alignment: _showPalette
-                      ? Alignment.bottomCenter
-                      : Alignment.center,
-                  child: _buildDusty(),
-                ),
-                // 톱니바퀴 (Dusty 오른쪽 위)
-                Positioned(
-                  top: _showPalette ? 240 : 40, // 팔레트 있으면 아래로
-                  right: 20,
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() => _showPalette = !_showPalette);
-                    },
-                    child: const Icon(
-                      Icons.settings,
-                      size: 32,
-                      color: Colors.black87,
+            child: Center(
+              child: SizedBox(
+                width: 280,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    _buildDusty(),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() => _showPalette = !_showPalette);
+                        },
+                        child: Image.asset(
+                          'assets/images/icons/ic_settings.png',
+                          width: 32,
+                          height: 32,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
+
+          const SizedBox(height: 20),
         ],
       ),
     );
   }
 
   Widget _buildDusty() {
-    // null이거나 검정이면 기본 Dusty
+    Widget dustyWidget;
+
     if (_selectedColor == null || _selectedColor == const Color(0xFF000000)) {
-      return Image.asset(
+      dustyWidget = Image.asset(
         'assets/images/dusty_default.png',
         width: 231,
         height: 221,
       );
-    }
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        ColorFiltered(
-          colorFilter: ColorFilter.mode(_selectedColor!, BlendMode.srcIn),
-          child: Image.asset(
-            'assets/images/dusty_body.png',
-            width: 231,
-            height: 221,
+    } else {
+      dustyWidget = Stack(
+        alignment: Alignment.center,
+        children: [
+          ColorFiltered(
+            colorFilter: ColorFilter.mode(_selectedColor!, BlendMode.srcIn),
+            child: Image.asset(
+              'assets/images/dusty_body.png',
+              width: 231,
+              height: 221,
+            ),
           ),
-        ),
-        Image.asset('assets/images/dusty_eyes.png', width: 231, height: 221),
+          Image.asset('assets/images/dusty_eyes.png', width: 231, height: 221),
+        ],
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        dustyWidget,
+        const SizedBox(height: 1),
+        Image.asset('assets/images/dusty_shadow.png', width: 265),
       ],
     );
   }
 
-  // 색 팔레트 (피그마 격자식)
   Widget _buildPalette() {
-    // 각 행: 하나의 색조가 명도별로 세로 배치
-    // 열: 다양한 색조 (빨→노→초→파→보 등)
     final List<Color> hues = [
       Colors.red,
       Colors.orange,
@@ -415,51 +419,35 @@ class _GoalScreenState extends State<GoalScreen> {
       Colors.brown,
       Colors.grey,
     ];
-    // 명도 (밝은 것 → 어두운 것)
     final List<double> lightness = [0.9, 0.75, 0.6, 0.45, 0.3, 0.15];
 
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: lightness.map((l) {
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: hues.map((hue) {
-              // HSL로 명도 조절해서 격자 색 만들기
-              final hsl = HSLColor.fromColor(hue).withLightness(l);
-              final color = hsl.toColor();
-              final isSelected = _selectedColor == color;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedColor = color),
-                child: Container(
-                  width: 20,
-                  height: 20,
-                  margin: const EdgeInsets.all(1),
-                  decoration: BoxDecoration(
-                    color: color,
-                    border: Border.all(
-                      color: isSelected ? Colors.white : Colors.transparent,
-                      width: 2,
-                    ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: lightness.map((l) {
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: hues.map((hue) {
+            final hsl = HSLColor.fromColor(hue).withLightness(l);
+            final color = hsl.toColor();
+            final isSelected = _selectedColor == color;
+            return GestureDetector(
+              onTap: () => setState(() => _selectedColor = color),
+              child: Container(
+                width: 20,
+                height: 20,
+                margin: const EdgeInsets.all(1),
+                decoration: BoxDecoration(
+                  color: color,
+                  border: Border.all(
+                    color: isSelected ? Colors.black : Colors.transparent,
+                    width: 2,
                   ),
                 ),
-              );
-            }).toList(),
-          );
-        }).toList(),
-      ),
+              ),
+            );
+          }).toList(),
+        );
+      }).toList(),
     );
   }
 }

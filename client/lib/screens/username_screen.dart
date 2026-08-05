@@ -119,7 +119,7 @@ class _UsernameScreenState extends State<UsernameScreen> {
                 ),
                 const SizedBox(height: 32),
                 const Text(
-                  'Choose a\nusername',
+                  'Create your\nhandle',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w700,

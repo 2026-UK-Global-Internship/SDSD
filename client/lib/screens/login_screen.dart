@@ -111,8 +111,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w700,
-                    fontSize: 32,
-                    height: 1.15,
+                    fontSize: 40,
+                    height: 1,
                   ),
                 ),
                 const SizedBox(height: 8),

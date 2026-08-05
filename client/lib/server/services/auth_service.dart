@@ -35,11 +35,14 @@ class AuthService {
       }
 
       // 2. Firebase Auth 회원가입
+      print('🟡 A: Firebase Auth 시작');
       UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(email: email, password: password);
+      print('🟡 B: Firebase Auth 완료');
 
       // 3. Firestore에 users 문서 생성
       await _createUserDocument(userCredential.user!.uid, displayName, email);
+      print('🟡 C: Firestore 문서 생성 완료');
 
       print('✓ 회원가입 성공: ${userCredential.user!.uid}');
     } on FirebaseAuthException catch (e) {
