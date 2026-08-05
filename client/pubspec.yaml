@@ -18,6 +18,7 @@ dependencies:
   cloud_firestore:
   firebase_storage:
 
+<<<<<<< HEAD
   cupertino_icons: ^1.0.8
   webview_flutter: 4.10.0
   google_maps_flutter: ^2.18.0 # 구글 지도 위젯 (핫스팟 핀 표시용)
@@ -30,6 +31,21 @@ dependencies:
   firebase_core: ^4.12.1
   google_sign_in: ^6.2.0
   flutter_colorpicker: ^1.1.0
+=======
+    cupertino_icons: ^1.0.8
+    webview_flutter: 4.10.0
+    google_maps_flutter: ^2.18.0 # 구글 지도 위젯 (핫스팟 핀 표시용)
+    geolocator: ^14.0.3 # GPS 현재 위치 가져오기
+    camera: ^0.12.0+2 # 인앱 카메라 (청소 인증 - 갤러리 업로드 방지)
+    image_picker: ^1.2.3 # 사진 촬영/선택 (쓰레기 신고용)
+    http: ^1.6.0 # 백엔드 REST API 통신
+    provider: ^6.1.5+1 # 상태 관리
+    shared_preferences: ^2.5.5 # 세션/로그인 토큰 저장
+    firebase_core: ^4.12.1
+    google_sign_in: ^6.2.0
+    flutter_colorpicker: ^1.1.0
+    supabase_flutter: ^2.16.0
+>>>>>>> seoyeon
 dev_dependencies:
   flutter_test:
     sdk: flutter

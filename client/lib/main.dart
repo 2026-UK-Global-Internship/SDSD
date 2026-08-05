@@ -7,12 +7,19 @@ import 'screens/splash_screen.dart';
 import 'package:sdsd/server/services/auth_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/character_color_screen.dart';
+import 'screens/test/full_integration_test_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Firebase 초기화
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Supabase.initialize(
+    url: 'https://mfgvdpzxhlbjxqzrtjue.supabase.co',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mZ3ZkcHp4aGxianhxenJ0anVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4MzkwNzMsImV4cCI6MjEwMTQxNTA3M30.OHCcC6jXmbrb-SK7lHwsO5JNMWoBAkrEy-9uo6aJ-PE',
+  );
 
   runApp(const MyApp());
 }
@@ -50,7 +57,11 @@ class MyApp extends StatelessWidget {
         // tested with just a hot reload.
         colorScheme: .fromSeed(seedColor: Colors.deepPurple),
       ),
+<<<<<<< HEAD
       //home: const SplashScreen(),
+=======
+      home: const FullIntegrationTestScreen(),
+>>>>>>> seoyeon
       //home: const HomeScreen(name: 'Alan'),
       //home: const CharacterColorScreen(name: 'Alan'),
       //home: GoalScreen(name: 'J'),
