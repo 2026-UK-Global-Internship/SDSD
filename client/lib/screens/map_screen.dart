@@ -9,7 +9,21 @@ import 'package:sdsd/server/services/hotspots_service.dart';
 import 'package:sdsd/server/services/auth_service.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({super.key, this.showSubmittedToast = false});
+
+  final bool showSubmittedToast; // true면 진입 시 "Report submitted!" 표시
+
+  // ⭐ static이라 앱 실행 중에는 상태 유지됨
+  // 신고 직후, 서버에 다시 물어보지 않고도 즉시 지도에 마커를 하나 더
+  // 찍어주기 위한 "낙관적 업데이트"용 좌표 목록입니다.
+  // (실제 상세 데이터는 없고 좌표만 있어서, 다음 _loadHotspots() 호출 때
+  //  서버의 진짜 hotspot 데이터로 자연스럽게 대체됩니다)
+  static final List<LatLng> _dustSpots = [];
+
+  // 외부(신고 화면 등)에서 새 마커를 즉시 추가할 때 호출
+  static void addDustSpot(LatLng spot) {
+    _dustSpots.add(spot);
+  }
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -39,6 +53,14 @@ class _MapScreenState extends State<MapScreen> {
       moveCamera: true,
       silent: true,
     ); // 시작 시 내 위치로 이동, 실패해도 조용히 넘어감
+
+    // 진입 시 "Report submitted!" 표시 요청이 있으면 알림
+    if (widget.showSubmittedToast) {
+      // 화면 그려진 후 실행 (안 그러면 Overlay 접근 에러)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showReportSubmittedToast();
+      });
+    }
   }
 
   // ==========================================
@@ -141,8 +163,7 @@ class _MapScreenState extends State<MapScreen> {
       child: Stack(
         children: [
           FlutterMap(
-            mapController:
-                _mapController, // ← 복구: 없으면 _getMyLocation의 카메라 이동이 반영 안 됨
+            mapController: _mapController, // 없으면 _getMyLocation의 카메라 이동이 반영 안 됨
             options: const MapOptions(initialCenter: _center, initialZoom: 15),
             children: [
               TileLayer(
@@ -153,7 +174,7 @@ class _MapScreenState extends State<MapScreen> {
                 markers: [
                   // 내 위치 (파란 원) - 실제 GPS 위치, 못 가져왔으면 대체 좌표
                   Marker(
-                    point: _myLocation ?? _center, // ← 복구
+                    point: _myLocation ?? _center,
                     width: 24,
                     height: 24,
                     child: Container(
@@ -171,7 +192,7 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     ),
                   ),
-                  // 먼지 마커들 - 실제 서버 데이터 기반 (← _dustSpots 대신 _hotspots 사용)
+                  // 먼지 마커들 - 실제 서버 데이터 기반
                   ..._hotspots.map((hotspot) {
                     final GeoPoint location = hotspot['location'] as GeoPoint;
                     return Marker(
@@ -184,6 +205,25 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     );
                   }),
+                  // 방금 신고해서 아직 서버 재조회 전인 "낙관적 업데이트" 마커
+                  // (실데이터가 없어 상세 시트 대신 안내만 표시)
+                  ...MapScreen._dustSpots.map(
+                    (spot) => Marker(
+                      point: spot,
+                      width: 60,
+                      height: 60,
+                      child: GestureDetector(
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('정보를 동기화하는 중입니다. 잠시 후 다시 시도해주세요'),
+                            ),
+                          );
+                        },
+                        child: Image.asset('assets/images/marker_dust.png'),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -256,7 +296,7 @@ class _MapScreenState extends State<MapScreen> {
                 GestureDetector(
                   onTap: _isLocating
                       ? null
-                      : () => _getMyLocation(moveCamera: true), // ← 복구
+                      : () => _getMyLocation(moveCamera: true),
                   child: _isLocating
                       ? const SizedBox(
                           width: 56,
@@ -278,6 +318,84 @@ class _MapScreenState extends State<MapScreen> {
         ],
       ),
     );
+  }
+
+  // ==========================================
+  // "Report submitted!" 알림 표시 (3초간)
+  // ==========================================
+  void _showReportSubmittedToast() {
+    final overlay = Overlay.of(context);
+    final entry = OverlayEntry(
+      builder: (context) => Positioned(
+        bottom: 110, // 내비바 위쪽
+        left: 0,
+        right: 0,
+        child: SafeArea(
+          child: Center(
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(40),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 초록 체크 아이콘
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFF10B981),
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.check,
+                        color: Color(0xFF10B981),
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // 텍스트
+                    const Text(
+                      'Report submitted!',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(entry);
+
+    // 3초 후 자동으로 사라짐
+    Future.delayed(const Duration(seconds: 3), () {
+      entry.remove();
+    });
   }
 
   // ==========================================
@@ -725,9 +843,7 @@ class _HotspotPartySheetState extends State<_HotspotPartySheet> {
                       width: double.infinity,
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: _isReserving
-                            ? null
-                            : _handleStartPlogging, // ← 연결
+                        onPressed: _isReserving ? null : _handleStartPlogging,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFFB923C),
                           foregroundColor: Colors.white,

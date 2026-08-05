@@ -30,6 +30,7 @@ dependencies:
     google_sign_in: ^6.2.0
     flutter_colorpicker: ^1.1.0
     supabase_flutter: ^2.16.0
+    geocoding: ^4.0.0
 
 dev_dependencies:
     flutter_test:
