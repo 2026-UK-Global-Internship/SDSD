@@ -494,10 +494,13 @@ class _HotspotPartySheetState extends State<_HotspotPartySheet> {
       //   ),
       // );
 
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('예약 완료! 플로깅 화면 연결은 준비 중입니다.')),
-      );
+      // 예약 성공 → PloggingScreen으로 이동
+      Navigator.of(context).pop(); // 시트 닫기
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const PloggingScreen()));
+      // TODO: 나중에 hotspot 정보를 PloggingScreen에 넘기기
+      //       PloggingScreen(reservedHotspot: widget.hotspot)
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -766,33 +769,6 @@ class _HotspotPartySheetState extends State<_HotspotPartySheet> {
                             ),
                           ),
                         ),
-<<<<<<< HEAD
-                      ],
-                    ),
-                    const Spacer(), // 남은 공간 밀어내기
-                    // Start Plogging! 버튼
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.pop(context); // 시트 먼저 닫기
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const PloggingScreen(),
-                              ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFB923C),
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-=======
                       ),
                       const SizedBox(width: 10),
                       // 오른쪽: 파티원 카드
@@ -807,7 +783,6 @@ class _HotspotPartySheetState extends State<_HotspotPartySheet> {
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [Color(0xFFFBBF24), Color(0xFFF472B6)],
->>>>>>> main
                             ),
                           ),
                           child: Stack(
