@@ -1,23 +1,11 @@
-//flogging_service.dart
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../services/character_service.dart';
-import 'photo_upload_service.dart';
+import 'character_service.dart';
 
 class FloggingService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final SupabaseClient _supabase; // ★ 추가
-  late CharacterService _characterService;
-  late PhotoUploadService _photoUploadService; // ★ 변경: late 사용
-
-  // ★ 생성자 추가
-  FloggingService(this._supabase) {
-    _characterService = CharacterService();
-    _photoUploadService = PhotoUploadService(_supabase); // ★ Supabase 전달
-  }
+  final CharacterService _characterService = CharacterService();
 
   // 조깅 XP 계산 기준 (가정값): 100걸음당 1 XP
   int _calculateXpFromSteps(int steps) => steps ~/ 100;
@@ -25,6 +13,14 @@ class FloggingService {
   // ==========================================
   // 1. 조깅 기록 저장 (조깅이 끝난 시점에 한 번에 호출)
   // ==========================================
+  // 설계 이유:
+  //   startedAt(시작 시각)과 createdAt(저장 시각)이 스키마에 따로 있다는 것은
+  //   실시간으로 문서를 계속 update하는 게 아니라,
+  //   조깅 종료 후 최종 데이터를 한 번에 저장하는 구조라는 의미입니다.
+  //   (앱에서는 조깅 중 steps/calorie/경로를 로컬 변수에 쌓아뒀다가,
+  //    "종료" 버튼을 누르면 이 함수를 1번 호출합니다)
+  // 반환값 변경 안내: String(floggingId만) → Map<String, dynamic>
+  //   floggingId뿐 아니라 XP 지급 결과(레벨업 여부 등)도 함께 반환하기 위함입니다.
   Future<Map<String, dynamic>> saveFloggingRecord({
     required DateTime startedAt,
     required double startLatitude,
@@ -63,13 +59,13 @@ class FloggingService {
         'steps': steps,
         'routePolyline': routePolyline,
         'startedAt': Timestamp.fromDate(startedAt),
-        'cleanup': null,
+        'cleanup': null, // 청소 안 했으면 null, 나중에 recordCleanup()으로 채움
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       print('✓ 조깅 기록 저장 성공: ${docRef.id}');
 
-      // 걸음수 기반으로 XP 지급
+      // ★ 연결: 걸음수 기반으로 XP 지급
       final xpToGain = _calculateXpFromSteps(steps);
       Map<String, dynamic>? xpResult;
       if (xpToGain > 0) {
@@ -91,6 +87,7 @@ class FloggingService {
   // ==========================================
   // 2. 본인의 조깅 기록 목록 조회 (최신순)
   // ==========================================
+  // 미리 만들어둔 Composite Index (userId Asc, startedAt Desc) 사용
   Future<List<Map<String, dynamic>>> getUserFloggingHistory({
     int limit = 20,
   }) async {
@@ -130,6 +127,8 @@ class FloggingService {
 
       final data = doc.data()!;
 
+      // Security Rules상 본인 것만 read 가능하지만,
+      // 클라이언트에서도 먼저 확인해 불필요한 오류 노출을 막음
       final currentUser = _auth.currentUser;
       if (currentUser == null || data['userId'] != currentUser.uid) {
         throw Exception('본인의 기록만 조회할 수 있습니다');
@@ -145,10 +144,13 @@ class FloggingService {
   // ==========================================
   // 4. 청소 정보 연결 (조깅 중 hotspot을 청소했을 때)
   // ==========================================
+  // 참고: hotspots 컬렉션의 status를 "cleaned"로 바꾸는 것은
+  //      HotspotService.completeCleaning()이 담당합니다.
+  //      이 함수는 "그 청소가 이 조깅 세션에서 일어났다"는 연결 정보만
+  //      flogging 문서에 남기는 역할입니다.
   Future<void> recordCleanup({
     required String floggingId,
     required String hotspotId,
-    Uint8List? photoBytes,
   }) async {
     try {
       final currentUser = _auth.currentUser;
@@ -162,22 +164,10 @@ class FloggingService {
         throw Exception('본인의 조깅 기록에만 청소 정보를 연결할 수 있습니다');
       }
 
-      String photoUrl = '';
-      if (photoBytes != null) {
-        try {
-          photoUrl = await _photoUploadService.uploadCleanupPhoto(
-            floggingId: floggingId,
-            fileBytes: photoBytes,
-          );
-        } catch (e) {
-          print('⚠️ 사진 업로드 실패, 사진 없이 연결을 계속합니다: $e');
-        }
-      }
-
       await _firestore.collection('flogging').doc(floggingId).update({
         'cleanup': {
           'hotspotId': hotspotId,
-          'photoUrl': photoUrl,
+          'photoUrl': '', // 사진 업로드 기능은 아직 없음 (추후 추가 예정)
           'cleanedAt': FieldValue.serverTimestamp(),
         },
       });
