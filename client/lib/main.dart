@@ -57,11 +57,7 @@ class MyApp extends StatelessWidget {
         // tested with just a hot reload.
         colorScheme: .fromSeed(seedColor: Colors.deepPurple),
       ),
-<<<<<<< HEAD
       //home: const SplashScreen(),
-=======
-      home: const FullIntegrationTestScreen(),
->>>>>>> seoyeon
       //home: const HomeScreen(name: 'Alan'),
       //home: const CharacterColorScreen(name: 'Alan'),
       //home: GoalScreen(name: 'J'),
