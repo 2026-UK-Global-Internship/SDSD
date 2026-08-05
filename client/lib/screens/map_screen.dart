@@ -246,8 +246,8 @@ class MapScreen extends StatelessWidget {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Container(
-                                      width: 40,
-                                      height: 40,
+                                      width: 56,
+                                      height: 56,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         border: Border.all(
@@ -296,8 +296,8 @@ class MapScreen extends StatelessWidget {
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(16),
                                 gradient: const LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
                                   colors: [
                                     Color(0xFFFBBF24),
                                     Color(0xFFF472B6),
