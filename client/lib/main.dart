@@ -56,10 +56,11 @@ class MyApp extends StatelessWidget {
         // tested with just a hot reload.
         colorScheme: .fromSeed(seedColor: Colors.deepPurple),
       ),
-      //home: const SplashScreen(),
+      home: const SplashScreen(),
       //home: const HomeScreen(name: 'Alan'),
-      home: GoalScreen(name: 'J'),
-      // home: MapScreen(),
+      //home: const CharacterColorScreen(name: 'Alan'),
+      //home: GoalScreen(name: 'J'),
+      //home: MapScreen(),
     );
   }
 }
