@@ -39,45 +39,40 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
-  // ==========================================
-  // 회원가입 버튼을 눌렀을 때 실행되는 함수
-  // ==========================================
   Future<void> _handleSignUp() async {
-    // 입력값 가져오기
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    // 입력값 검증 (공백 확인)
     if (email.isEmpty || password.isEmpty) {
       _showErrorSnackBar('이메일과 비밀번호를 입력해주세요');
       return;
     }
 
     setState(() {
-      _isLoading = true; // 로딩 시작
+      _isLoading = true;
     });
 
     try {
-      // 임시 displayName 설정 (NameScreen에서 받을 예정)
+      print('🔵 1단계: signUp 시작');
       await _authService.signUp(
         email: email,
         password: password,
-        displayName: '사용자', // 기본값 (NameScreen에서 변경 예정)
+        displayName: '사용자',
       );
+      print('🔵 2단계: signUp 완료');
 
-      // 회원가입 성공 → NameScreen으로 이동
       if (mounted) {
         Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => NameScreen()));
       }
     } catch (e) {
-      // 회원가입 실패 → 오류 메시지 표시
+      print('🔴 에러: $e');
       _showErrorSnackBar(e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) {
         setState(() {
-          _isLoading = false; // 로딩 종료
+          _isLoading = false;
         });
       }
     }
