@@ -6,7 +6,6 @@ import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
 import 'package:sdsd/server/services/auth_service.dart';
 import 'screens/home_screen.dart';
-import 'screens/character_color_screen.dart';
 import 'screens/test/full_integration_test_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -59,9 +58,8 @@ class MyApp extends StatelessWidget {
       ),
       //home: const SplashScreen(),
       //home: const HomeScreen(name: 'Alan'),
-      //home: const CharacterColorScreen(name: 'Alan'),
-      //home: GoalScreen(name: 'J'),
-      home: MapScreen(),
+      home: GoalScreen(name: 'J'),
+      // home: MapScreen(),
     );
   }
 }
