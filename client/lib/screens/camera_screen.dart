@@ -1,6 +1,7 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'set_location_screen.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -95,6 +96,51 @@ class _CameraScreenState extends State<CameraScreen> {
           children: [
             // 실시간 카메라 프리뷰
             Positioned.fill(child: CameraPreview(_controller!)),
+            // 위쪽
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 120, // 프레임 위쪽 여백
+              child: Container(color: Colors.black.withValues(alpha: 0.5)),
+            ),
+            // 아래쪽
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 180, // 프레임 아래쪽 여백 (촬영 버튼 자리 포함)
+              child: Container(color: Colors.black.withValues(alpha: 0.5)),
+            ),
+            // 왼쪽
+            Positioned(
+              top: 120,
+              bottom: 180,
+              left: 0,
+              width: 32, // 프레임 왼쪽 여백
+              child: Container(color: Colors.black.withValues(alpha: 0.5)),
+            ),
+            // 오른쪽
+            Positioned(
+              top: 120,
+              bottom: 180,
+              right: 0,
+              width: 32, // 프레임 오른쪽 여백
+              child: Container(color: Colors.black.withValues(alpha: 0.5)),
+            ),
+
+            // 4개 모서리 프레임
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  top: 120, // 위 오버레이 높이랑 맞춤
+                  bottom: 180, // 아래 오버레이 높이랑 맞춤
+                  left: 32, // 왼쪽 오버레이 너비랑 맞춤
+                  right: 32, // 오른쪽 오버레이 너비랑 맞춤
+                ),
+                child: _buildCornerFrame(),
+              ),
+            ),
             // 상단 바 (뒤로가기 + 타이틀)
             Positioned(
               top: 0,
@@ -146,16 +192,6 @@ class _CameraScreenState extends State<CameraScreen> {
                     height: 80,
                   ),
                 ),
-              ),
-            ),
-            // 4개 모서리 프레임
-            Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 40,
-                  vertical: 100,
-                ),
-                child: _buildCornerFrame(),
               ),
             ),
           ],
@@ -312,8 +348,13 @@ class _CameraScreenState extends State<CameraScreen> {
               GestureDetector(
                 onTap: () {
                   // TODO(backend): Firebase Storage에 사진 업로드
-                  // TODO: Set Location 화면으로 이동
-                  Navigator.pop(context); // 임시로 홈으로 돌아감
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          SetLocationScreen(photoPath: _capturedImagePath!),
+                    ),
+                  );
                 },
                 child: Container(
                   width: double.infinity,

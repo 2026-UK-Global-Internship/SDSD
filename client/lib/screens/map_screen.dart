@@ -3,18 +3,42 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'party_invite_screen.dart';
 
-class MapScreen extends StatelessWidget {
-  const MapScreen({super.key});
+class MapScreen extends StatefulWidget {
+  const MapScreen({super.key, this.showSubmittedToast = false});
 
-  // Camden 중심 좌표
-  static const LatLng _center = LatLng(51.5394, -0.1426);
+  final bool showSubmittedToast; // true면 진입 시 "Report submitted!" 표시
 
-  // 임시 먼지 마커 위치들 (간격 넓힘, 나중에 서버 데이터로 교체)
+  // ⭐ static이라 앱 실행 중에는 상태 유지됨
+  // TODO(backend): Firestore hotspots 컬렉션에서 실시간 스트림으로 받아오기
   static final List<LatLng> _dustSpots = [
     const LatLng(51.5420, -0.1460),
     const LatLng(51.5375, -0.1390),
     const LatLng(51.5410, -0.1385),
   ];
+
+  // 외부에서 새 마커 추가할 때 호출
+  static void addDustSpot(LatLng spot) {
+    _dustSpots.add(spot);
+  }
+
+  @override
+  State<MapScreen> createState() => _MapScreenState();
+}
+
+class _MapScreenState extends State<MapScreen> {
+  static const LatLng _center = LatLng(51.5394, -0.1426);
+
+  @override
+  void initState() {
+    super.initState();
+    // 진입 시 "Report submitted!" 표시 요청이 있으면 알림
+    if (widget.showSubmittedToast) {
+      // 화면 그려진 후 실행 (안 그러면 Overlay 접근 에러)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showReportSubmittedToast();
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +75,7 @@ class MapScreen extends StatelessWidget {
                     ),
                   ),
                   // 먼지 마커들
-                  ..._dustSpots.map(
+                  ...MapScreen._dustSpots.map(
                     (spot) => Marker(
                       point: spot,
                       width: 60,
@@ -99,6 +123,82 @@ class MapScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // "Report submitted!" 알림 표시 (3초간)
+  void _showReportSubmittedToast() {
+    final overlay = Overlay.of(context);
+    final entry = OverlayEntry(
+      builder: (context) => Positioned(
+        bottom: 110, // 내비바 위쪽
+        left: 0,
+        right: 0,
+        child: SafeArea(
+          child: Center(
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(40),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 초록 체크 아이콘
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFF10B981),
+                          width: 2,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.check,
+                        color: Color(0xFF10B981),
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // 텍스트
+                    const Text(
+                      'Report submitted!',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(entry);
+
+    // 3초 후 자동으로 사라짐
+    Future.delayed(const Duration(seconds: 3), () {
+      entry.remove();
+    });
   }
 
   void _showHotspotSheet(BuildContext context) {
@@ -359,7 +459,7 @@ class MapScreen extends StatelessWidget {
                     const Spacer(), // 남은 공간 밀어내기
                     // Start Plogging! 버튼
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 20), // 이 숫자로 위치 조절
+                      padding: const EdgeInsets.only(bottom: 20),
                       child: SizedBox(
                         width: double.infinity,
                         height: 56,
