@@ -53,8 +53,8 @@ class MyApp extends StatelessWidget {
       //home: const SplashScreen(),
       //home: const HomeScreen(name: 'Alan'),
       //home: const CharacterColorScreen(name: 'Alan'),
-      home: GoalScreen(name: 'J'),
-      //home: MapScreen(),
+      //home: GoalScreen(name: 'J'),
+      home: MapScreen(),
     );
   }
 }

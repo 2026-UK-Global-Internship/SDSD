@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'map_screen.dart';
+import 'package:sdsd/server/services/auth_service.dart';
+import 'splash_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.name});
@@ -17,149 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: ScrollConfiguration(
-        behavior: const ScrollBehavior().copyWith(overscroll: false),
-        child: SingleChildScrollView(
-          physics: const ClampingScrollPhysics(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ---------- 헤더 + 활동카드 (겹침) ----------
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  // 1. 주황 구름 배경 + 인사말
-                  Image.asset(
-                    'assets/images/home_header_cloud.png',
-                    width: double.infinity,
-                    fit: BoxFit.fitWidth,
-                  ),
-                  Positioned(
-                    left: 24,
-                    top: 94,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Hello ${widget.name},',
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w500,
-                            fontSize: 20,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Continue\nPlogging!',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w700,
-                            fontSize: 70,
-                            height: 1.1,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // 2. 활동 카드 (헤더 아래쪽에 겹쳐서 배치)
-                  Positioned(
-                    left: 24,
-                    right: 24,
-                    top: 400, // 헤더 위에서 이만큼 내려온 위치 (겹침 지점)
-                    child: _buildActivityCard(),
-                  ),
-                ],
-              ),
-              // 활동 카드가 Stack 밖으로 삐져나온 만큼 아래 공간 확보
-              const SizedBox(height: 60),
-              // ---------- Start Plogging / Report Trash ----------
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 100, 24, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          // TODO: 플로깅 시작 화면으로 이동
-                        },
-                        child: Image.asset(
-                          'assets/images/btn_start_plogging.png',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          // TODO: 쓰레기 신고 화면으로 이동
-                        },
-                        child: Image.asset(
-                          'assets/images/btn_report_trash.png',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // ---------- Friends ----------
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
-                child: Row(
-                  children: [
-                    Image.asset(
-                      'assets/images/icons/ic_friends.png',
-                      width: 32,
-                      height: 32,
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Friends',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 40,
-                        color: Color(0xFFFFAD3B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // ---------- Add Friends 버튼 ----------
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                child: GestureDetector(
-                  onTap: () {
-                    // TODO: 친구 추가 화면으로 이동
-                  },
-                  child: Image.asset(
-                    'assets/images/btn_add_friends.png',
-                    width: double.infinity,
-                  ),
-                ),
-              ),
-              // ---------- Weekly Ranking ----------
-              Padding(
-                padding: const EdgeInsets.fromLTRB(5, 20, 5, 24),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 제목: 아이콘 + Weekly Ranking
-
-                      // 포디움 이미지 + 캐릭터/이름 (Stack 겹침)
-                      _buildPodium(),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      body: _buildBody(),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
@@ -193,6 +53,166 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildBody() {
+    switch (_currentTab) {
+      case 1:
+        return const MapScreen();
+      case 4:
+        return _buildTempLogout(); // 임시 로그아웃 화면
+      // TODO: case 2 카메라, case 3 Dusty, case 4 프로필
+      default:
+        return _buildHomePage();
+    }
+  }
+
+  // 임시 로그아웃 화면 (나중에 프로필 화면으로 교체)
+  Widget _buildTempLogout() {
+    return Center(
+      child: ElevatedButton(
+        onPressed: () async {
+          await AuthService().signOut();
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const SplashScreen()),
+          );
+        },
+        child: const Text('로그아웃 (임시)'),
+      ),
+    );
+  }
+
+  // ---------- 홈 탭 콘텐츠 ----------
+  Widget _buildHomePage() {
+    return ScrollConfiguration(
+      behavior: const ScrollBehavior().copyWith(overscroll: false),
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Image.asset(
+                  'assets/images/home_header_cloud.png',
+                  width: double.infinity,
+                  fit: BoxFit.fitWidth,
+                ),
+                Positioned(
+                  left: 24,
+                  top: 94,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Hello ${widget.name},',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w500,
+                          fontSize: 20,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Continue\nPlogging!',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 70,
+                          height: 1.1,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  left: 24,
+                  right: 24,
+                  top: 400,
+                  child: _buildActivityCard(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 60),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 100, 24, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() => _currentTab = 1); // 지도 탭으로 전환
+                      },
+                      child: Image.asset(
+                        'assets/images/btn_start_plogging.png',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        // TODO: 쓰레기 신고 화면으로 이동
+                      },
+                      child: Image.asset('assets/images/btn_report_trash.png'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
+              child: Row(
+                children: [
+                  Image.asset(
+                    'assets/images/icons/ic_friends.png',
+                    width: 32,
+                    height: 32,
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Friends',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 40,
+                      color: Color(0xFFFFAD3B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: GestureDetector(
+                onTap: () {
+                  // TODO: 친구 추가 화면으로 이동
+                },
+                child: Image.asset(
+                  'assets/images/btn_add_friends.png',
+                  width: double.infinity,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(5, 20, 5, 24),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [_buildPodium()],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ---------- 활동 카드 ----------
   Widget _buildActivityCard() {
     return Container(
@@ -210,7 +230,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 집 아이콘 + Camden, London
             Row(
               children: [
                 Image.asset(
@@ -231,7 +250,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 14),
-            // "My activities this week" + 빗자루 (양끝 배치로 넘침 방지)
             Row(
               children: [
                 const Text(
@@ -330,7 +348,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 하단 탭 아이템 (선택 여부에 따라 이미지 교체)
   Widget _buildNavItem(int index, String icon, String activeIcon) {
     final bool isSelected = _currentTab == index;
     return GestureDetector(
@@ -338,13 +355,6 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _currentTab = index;
         });
-
-        if (index == 1) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const MapScreen()),
-          );
-        }
       },
       behavior: HitTestBehavior.opaque,
       child: Padding(
@@ -358,7 +368,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // 포디움 (배경 이미지 + 캐릭터/이름 겹침)
   Widget _buildPodium() {
     return Stack(
       alignment: Alignment.bottomCenter,
@@ -368,7 +377,6 @@ class _HomeScreenState extends State<HomeScreen> {
           width: double.infinity,
           fit: BoxFit.contain,
         ),
-        // Weekly Ranking 텍스트 (이미지 안 아이콘 옆에)
         const Positioned(
           top: 24,
           left: 50,
@@ -382,7 +390,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-        // 1등 (가운데, 검정 James)
         Positioned(
           top: 40,
           child: _buildRanker(
@@ -391,7 +398,6 @@ class _HomeScreenState extends State<HomeScreen> {
             '7 cleans',
           ),
         ),
-        // 2등 (왼쪽, 분홍 Chris)
         Positioned(
           top: 70,
           left: 20,
@@ -401,7 +407,6 @@ class _HomeScreenState extends State<HomeScreen> {
             '5 cleans',
           ),
         ),
-        // 3등 (오른쪽, 초록 Kim)
         Positioned(
           top: 100,
           right: 20,
@@ -411,7 +416,6 @@ class _HomeScreenState extends State<HomeScreen> {
             '3 cleans',
           ),
         ),
-        // 내 순위 (포디움 이미지 안 맨 아래)
         Positioned(
           bottom: 20,
           left: 20,
@@ -461,7 +465,6 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 6),
         Image.asset(character, width: 54, height: 54),
         const SizedBox(height: 0),
-        // cleans 알약
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
           decoration: BoxDecoration(
@@ -472,7 +475,7 @@ class _HomeScreenState extends State<HomeScreen> {
             text: TextSpan(
               children: [
                 TextSpan(
-                  text: cleans.split(' ')[0], // 숫자 부분 (5, 7, 3)
+                  text: cleans.split(' ')[0],
                   style: const TextStyle(
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w900,
@@ -481,7 +484,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 TextSpan(
-                  text: ' cleans', // 단위 부분
+                  text: ' cleans',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w900,
