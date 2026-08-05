@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'package:sdsd/server/services/auth_service.dart';
+import 'package:sdsd/server/services/character_service.dart'; // ← 추가: 캐릭터 색상 변경은 여기 있음
 
 class GoalScreen extends StatefulWidget {
   const GoalScreen({super.key, required this.name});
@@ -23,6 +24,7 @@ class _GoalScreenState extends State<GoalScreen> {
 
   bool _isLoading = false;
   final AuthService _authService = AuthService();
+  final CharacterService _characterService = CharacterService(); // ← 추가
 
   static const _gradient = LinearGradient(
     begin: Alignment.topCenter,
@@ -49,15 +51,34 @@ class _GoalScreenState extends State<GoalScreen> {
     }
   }
 
+  // ==========================================
+  // Color 객체 → '#RRGGBB' 문자열 변환
+  // ==========================================
+  // auth_service.updateCharacterColor()는 '#RRGGBB'(7글자, 투명도 없음)만
+  // 허용하므로, ColorPicker/팔레트가 주는 Color 객체(투명도 포함 32비트 값)에서
+  // 투명도 부분을 잘라내고 변환합니다.
+  String _colorToHex(Color color) {
+    final hex = color.value.toRadixString(16).padLeft(8, '0');
+    return '#${hex.substring(2).toUpperCase()}';
+  }
+
   Future<void> _finishOnboarding() async {
     setState(() => _isLoading = true);
     try {
-      // TODO: 나중에 Firebase랑 연동해야 함
-      // final uid = _authService.currentUserId;
-      // if (uid == null) throw Exception('로그인된 사용자가 없습니다');
-      // final goalValue = _goalValues[_selectedGoal!];
-      // await _authService.updateWeeklyGoal(uid, goalValue);
-      // await _authService.completeOnboarding(uid);
+      final uid = _authService.currentUserId;
+      if (uid == null) throw Exception('로그인된 사용자가 없습니다');
+
+      // 1. 선택한 목표(weeklyGoal) 저장
+      final goalValue = _goalValues[_selectedGoal!];
+      await _authService.updateWeeklyGoal(uid, goalValue);
+
+      // 2. 선택한 캐릭터 색상 저장 (캐릭터 관련 기능은 CharacterService 담당)
+      final hexColor = _colorToHex(_selectedColor!);
+      await _characterService.updateCharacterColor(uid, hexColor);
+
+      // 3. 온보딩 완료 처리
+      //    (이 호출이 있어야 다음 로그인부터 "온보딩 끝난 사용자"로 인식됩니다)
+      await _authService.completeOnboarding(uid);
 
       if (mounted) {
         Navigator.of(context).pushReplacement(
