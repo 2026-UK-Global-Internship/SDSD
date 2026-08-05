@@ -1,36 +1,28 @@
-//hotspots_service.dart
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'character_service.dart';
-import 'photo_upload_service.dart';
 
 class HotspotService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final SupabaseClient _supabase; // ★ 추가
-  late CharacterService _characterService;
-  late PhotoUploadService _photoUploadService; // ★ 변경: late 사용
+  final CharacterService _characterService = CharacterService();
 
+  // 인원 규모로 선택 가능한 값 (밸런스/기획 조정 시 이 목록만 바꾸면 됨)
   static const List<String> _validCrewSizes = ['solo', 'duo', 'squad', 'more'];
-
-  // ★ 생성자 추가
-  HotspotService(this._supabase) {
-    _characterService = CharacterService();
-    _photoUploadService = PhotoUploadService(_supabase); // ★ Supabase 전달
-  }
 
   // ==========================================
   // 1. Hotspot 신고 (쓰레기 위치 등록)
   // ==========================================
+  // Security Rules 요구사항:
+  //   - reporterId == 현재 로그인한 사용자 uid
+  //   - status는 반드시 "open"으로 시작
+  //   - location은 GeoPoint 타입이어야 함
   Future<String> reportHotspot({
     required double latitude,
     required double longitude,
     required String trashType,
     required String locationDescription,
     required String crewSize,
-    Uint8List? photoBytes,
   }) async {
     try {
       final currentUser = _auth.currentUser;
@@ -61,28 +53,14 @@ class HotspotService {
         throw Exception('올바른 경도 값이 아닙니다 (-180 ~ 180)');
       }
 
-      final docRef = _firestore.collection('hotspots').doc();
-
-      String photoUrl = '';
-      if (photoBytes != null) {
-        try {
-          photoUrl = await _photoUploadService.uploadHotspotPhoto(
-            hotspotId: docRef.id,
-            fileBytes: photoBytes,
-          );
-        } catch (e) {
-          print('⚠️ 사진 업로드 실패, 사진 없이 신고를 계속합니다: $e');
-        }
-      }
-
-      await docRef.set({
+      final docRef = await _firestore.collection('hotspots').add({
         'reporterId': currentUser.uid,
-        'photoUrl': photoUrl,
+        'photoUrl': '', // 사진 업로드 기능은 아직 없음 (추후 추가 예정)
         'trashType': trashType,
         'locationDescription': trimmedDescription,
         'crewSize': crewSize,
         'location': GeoPoint(latitude, longitude),
-        'status': 'open',
+        'status': 'open', // Security Rules가 요구하는 초기값
         'reservedBy': null,
         'ttl': null,
         'createdAt': FieldValue.serverTimestamp(),
@@ -320,7 +298,7 @@ class HotspotService {
   }
 
   // ==========================================
-  // 8. Hotspot 삭제 (신고자만 가능)
+  // 8. Hotspot 삭제 (신고자만, open 상태일 때만 가능)
   // ==========================================
   Future<void> deleteHotspot(String hotspotId) async {
     try {

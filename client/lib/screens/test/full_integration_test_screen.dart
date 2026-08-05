@@ -1,13 +1,10 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User; // ★ User 제외
+import '../../server/services/auth_service.dart';
 import '../../server/services/hotspots_service.dart';
 import '../../server/services/flogging_service.dart';
 import '../../server/services/character_service.dart';
 import '../../server/services/friendship_service.dart';
-import '../../server/services/auth_service.dart';
 
 class FullIntegrationTestScreen extends StatefulWidget {
   const FullIntegrationTestScreen({Key? key}) : super(key: key);
@@ -18,14 +15,12 @@ class FullIntegrationTestScreen extends StatefulWidget {
 }
 
 class _FullIntegrationTestScreenState extends State<FullIntegrationTestScreen> {
-  // ★ Supabase 클라이언트 - 나중에 초기화
-  late HotspotService _hotspotService;
-  late FloggingService _floggingService;
+  final HotspotService _hotspotService = HotspotService();
+  final FloggingService _floggingService = FloggingService();
   final CharacterService _characterService = CharacterService();
   final FriendshipService _friendshipService = FriendshipService();
   final AuthService _authService = AuthService();
 
-  // 테스트 화면 안에서 바로 로그인하기 위한 입력 필드
   final _loginEmailController = TextEditingController(text: 'test@example.com');
   final _loginPasswordController = TextEditingController(text: 'password123');
 
@@ -37,9 +32,6 @@ class _FullIntegrationTestScreenState extends State<FullIntegrationTestScreen> {
   String? _floggingId;
   String? _searchedTargetUid;
 
-  Uint8List? _selectedPhotoBytes;
-  String? _lastUploadedPhotoUrl;
-
   final _searchController = TextEditingController(text: 'test');
   final _crewSizeController = TextEditingController(text: 'duo');
   final _descriptionController = TextEditingController(
@@ -48,25 +40,6 @@ class _FullIntegrationTestScreenState extends State<FullIntegrationTestScreen> {
 
   String _log = '테스트 대기 중...';
   bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // ★ Supabase 초기화 후 service 생성
-    _initializeServices();
-  }
-
-  /// ★ Supabase가 준비되면 service 생성
-  void _initializeServices() {
-    try {
-      final supabase = Supabase.instance.client;
-      _hotspotService = HotspotService(supabase);
-      _floggingService = FloggingService(supabase);
-      _print('✓ Service 초기화 완료');
-    } catch (e) {
-      _print('✗ Service 초기화 실패: $e');
-    }
-  }
 
   @override
   void dispose() {
@@ -103,27 +76,6 @@ class _FullIntegrationTestScreenState extends State<FullIntegrationTestScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
-  }
-
-  // ==========================================
-  // 사진 선택 (갤러리에서 실제 이미지 하나 고르기)
-  // ==========================================
-  Future<void> _pickPhoto() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 70,
-    );
-    if (picked == null) return;
-
-    final bytes = await picked.readAsBytes();
-    setState(() {
-      _selectedPhotoBytes = bytes;
-    });
-    _print(
-      '✓ 사진 선택됨 (${(bytes.length / 1024).toStringAsFixed(1)} KB)\n'
-      '아래 A1(신고) 또는 B2(청소연결)에서 이 사진이 함께 업로드됩니다',
-    );
   }
 
   // ==========================================
@@ -168,21 +120,15 @@ class _FullIntegrationTestScreenState extends State<FullIntegrationTestScreen> {
         trashType: 'plastic',
         locationDescription: _descriptionController.text,
         crewSize: _crewSizeController.text,
-        photoBytes: _selectedPhotoBytes,
       );
-      setState(() => _hotspotId = id);
-
-      final saved = await _hotspotService.getHotspotById(id);
       setState(() {
+        _hotspotId = id;
         _hotspotStatus = 'open';
-        _lastUploadedPhotoUrl = saved['photoUrl'] as String?;
       });
-
       _print(
         '✓ [A1] 신고 완료\nid: $id\n'
         'crewSize: ${_crewSizeController.text}\n'
-        'description: ${_descriptionController.text}\n'
-        'photoUrl: ${saved['photoUrl'] ?? "(사진 없음)"}',
+        'description: ${_descriptionController.text}',
       );
     });
   }
@@ -259,19 +205,8 @@ class _FullIntegrationTestScreenState extends State<FullIntegrationTestScreen> {
       await _floggingService.recordCleanup(
         floggingId: _floggingId!,
         hotspotId: _hotspotId!,
-        photoBytes: _selectedPhotoBytes,
       );
-
-      final saved = await _floggingService.getFloggingById(_floggingId!);
-      final cleanup = saved['cleanup'] as Map<String, dynamic>?;
-      setState(() {
-        _lastUploadedPhotoUrl = cleanup?['photoUrl'] as String?;
-      });
-
-      _print(
-        '✓ [B2] 청소 정보 연결 완료 (flogging ↔ hotspot)\n'
-        'cleanup.photoUrl: ${cleanup?['photoUrl'] ?? "(사진 없음)"}',
-      );
+      _print('✓ [B2] 청소 정보 연결 완료 (flogging ↔ hotspot)');
     });
   }
 
@@ -388,10 +323,6 @@ class _FullIntegrationTestScreenState extends State<FullIntegrationTestScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // ==========================================
-                // 로그인 상태 분기
-                // ==========================================
                 if (!loggedIn) ...[
                   const Text(
                     '🔐 로그인이 필요합니다 (테스트용 간단 로그인)',
@@ -441,9 +372,6 @@ class _FullIntegrationTestScreenState extends State<FullIntegrationTestScreen> {
     );
   }
 
-  // ==========================================
-  // 로그인된 상태에서만 보여줄 실제 테스트 버튼들
-  // ==========================================
   List<Widget> _buildTestContent() {
     return [
       TextField(
@@ -460,35 +388,7 @@ class _FullIntegrationTestScreenState extends State<FullIntegrationTestScreen> {
         controller: _searchController,
         decoration: const InputDecoration(labelText: '친구 검색어 (닉네임)'),
       ),
-      const SizedBox(height: 12),
-
-      // ==========================================
-      // 사진 선택 / 미리보기 / 업로드 결과 확인
-      // ==========================================
-      ElevatedButton.icon(
-        onPressed: _isLoading ? null : _pickPhoto,
-        icon: const Icon(Icons.photo_library),
-        label: const Text('사진 선택 (Hotspot 신고 + 청소완료 사진에 재사용)'),
-      ),
-      if (_selectedPhotoBytes != null) ...[
-        const SizedBox(height: 8),
-        const Text('선택한 사진 미리보기:'),
-        Image.memory(_selectedPhotoBytes!, height: 120),
-      ],
-      if (_lastUploadedPhotoUrl != null &&
-          _lastUploadedPhotoUrl!.isNotEmpty) ...[
-        const SizedBox(height: 8),
-        const Text('✅ Supabase에 실제 업로드된 사진 (URL로 직접 불러온 것):'),
-        Image.network(
-          _lastUploadedPhotoUrl!,
-          height: 120,
-          errorBuilder: (_, __, ___) =>
-              const Text('⚠️ URL로 이미지를 불러오지 못했습니다 (버킷 Public 설정 확인 필요)'),
-        ),
-        Text(_lastUploadedPhotoUrl!, style: const TextStyle(fontSize: 10)),
-      ],
       const SizedBox(height: 20),
-
       const Text('🅰️ Hotspot', style: TextStyle(fontWeight: FontWeight.bold)),
       ElevatedButton(
         onPressed: _isLoading ? null : _a1_report,
