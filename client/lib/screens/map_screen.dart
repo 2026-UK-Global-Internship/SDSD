@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'party_invite_screen.dart';
+import 'plogging_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:sdsd/server/services/hotspots_service.dart';
@@ -493,10 +494,13 @@ class _HotspotPartySheetState extends State<_HotspotPartySheet> {
       //   ),
       // );
 
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('예약 완료! 플로깅 화면 연결은 준비 중입니다.')),
-      );
+      // 예약 성공 → PloggingScreen으로 이동
+      Navigator.of(context).pop(); // 시트 닫기
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => const PloggingScreen()));
+      // TODO: 나중에 hotspot 정보를 PloggingScreen에 넘기기
+      //       PloggingScreen(reservedHotspot: widget.hotspot)
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
