@@ -1,14 +1,11 @@
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/character_service.dart';
-import 'photo_upload_service.dart';
+import 'character_service.dart';
 
 class FloggingService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final CharacterService _characterService = CharacterService();
-  final PhotoUploadService _photoUploadService = PhotoUploadService();
 
   // 조깅 XP 계산 기준 (가정값): 100걸음당 1 XP
   int _calculateXpFromSteps(int steps) => steps ~/ 100;
@@ -151,12 +148,9 @@ class FloggingService {
   //      HotspotService.completeCleaning()이 담당합니다.
   //      이 함수는 "그 청소가 이 조깅 세션에서 일어났다"는 연결 정보만
   //      flogging 문서에 남기는 역할입니다.
-  //
-  // 변경 안내: photoUrl(String?) → photoBytes(Uint8List?)로 변경됨
   Future<void> recordCleanup({
     required String floggingId,
     required String hotspotId,
-    Uint8List? photoBytes,
   }) async {
     try {
       final currentUser = _auth.currentUser;
@@ -170,22 +164,10 @@ class FloggingService {
         throw Exception('본인의 조깅 기록에만 청소 정보를 연결할 수 있습니다');
       }
 
-      String photoUrl = '';
-      if (photoBytes != null) {
-        try {
-          photoUrl = await _photoUploadService.uploadCleanupPhoto(
-            floggingId: floggingId,
-            fileBytes: photoBytes,
-          );
-        } catch (e) {
-          print('⚠️ 사진 업로드 실패, 사진 없이 연결을 계속합니다: $e');
-        }
-      }
-
       await _firestore.collection('flogging').doc(floggingId).update({
         'cleanup': {
           'hotspotId': hotspotId,
-          'photoUrl': photoUrl,
+          'photoUrl': '', // 사진 업로드 기능은 아직 없음 (추후 추가 예정)
           'cleanedAt': FieldValue.serverTimestamp(),
         },
       });
