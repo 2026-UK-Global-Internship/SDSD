@@ -6,11 +6,13 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // ★ Google Sign-In clientId 설정 완료
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId:
-        '750213526967-r0sqpu12ntcvmho4d2p9oabmk6k0ds2l.apps.googleusercontent.com',
-  );
+  // ★ 중요: Android에서는 clientId를 지정하지 않습니다.
+  //   이유: clientId를 지정하면 Google이 "그 클라이언트에 등록된 SHA-1인지"까지
+  //   추가로 엄격하게 검증합니다. 팀원마다 SHA-1이 다르므로,
+  //   특정 clientId 하나로 고정하면 다른 팀원은 반드시 실패합니다.
+  //   clientId 없이 두면 google-services.json에 등록된
+  //   모든 SHA-1(당신 것 + 파트너 것)을 자동으로 인식합니다.
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   // ==========================================
   // 회원가입 (이메일/비밀번호)
@@ -21,30 +23,24 @@ class AuthService {
     required String displayName,
   }) async {
     try {
-      // 1. 입력값 검증
       if (email.isEmpty || password.isEmpty || displayName.isEmpty) {
         throw Exception('모든 필드를 입력해주세요');
       }
-
       if (password.length < 8) {
         throw Exception('비밀번호는 8자 이상이어야 합니다');
       }
-
       if (!email.contains('@')) {
         throw Exception('올바른 이메일 주소를 입력해주세요');
       }
-
       if (displayName.length > 50) {
         throw Exception('이름은 50자 이하여야 합니다');
       }
 
-      // 2. Firebase Auth 회원가입
       print('🟡 A: Firebase Auth 시작');
       UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(email: email, password: password);
       print('🟡 B: Firebase Auth 완료');
 
-      // 3. Firestore에 users 문서 생성
       await _createUserDocument(userCredential.user!.uid, displayName, email);
       print('🟡 C: Firestore 문서 생성 완료');
 
@@ -94,21 +90,17 @@ class AuthService {
   // ==========================================
   // Google 로그인 (신규 가입 + 로그인)
   // ==========================================
-  // 반환값: true면 "이번에 처음 가입한 신규 사용자", false면 "기존 사용자 로그인"
   Future<bool> signInWithGoogle() async {
     try {
-      // 1. Google 로그인
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
       if (googleUser == null) {
         throw Exception('Google 로그인이 취소되었습니다');
       }
 
-      // 2. Google 인증 정보 가져오기
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
 
-      // 3. Firebase 인증
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
@@ -118,11 +110,9 @@ class AuthService {
         credential,
       );
 
-      // 4. 새 사용자인지 확인
       bool isNewUser = userCredential.additionalUserInfo?.isNewUser ?? false;
 
       if (isNewUser) {
-        // 5. 새 사용자면 Firestore에 문서 생성
         String displayName = googleUser.displayName ?? '사용자';
         String email = googleUser.email;
 
@@ -146,12 +136,8 @@ class AuthService {
   // ==========================================
   Future<void> signOut() async {
     try {
-      // Firebase 로그아웃
       await _auth.signOut();
-
-      // Google 로그아웃
       await _googleSignIn.signOut();
-
       print('✓ 로그아웃 성공');
     } catch (e) {
       throw Exception('로그아웃 실패: $e');
@@ -195,7 +181,6 @@ class AuthService {
       if (newName.isEmpty) {
         throw Exception('이름을 입력해주세요');
       }
-
       if (newName.length > 50) {
         throw Exception('이름은 50자 이하여야 합니다');
       }
