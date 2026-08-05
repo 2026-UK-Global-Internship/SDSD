@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'party_invite_screen.dart';
+import 'plogging_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key, this.showSubmittedToast = false});
@@ -465,7 +466,13 @@ class _MapScreenState extends State<MapScreen> {
                         height: 56,
                         child: ElevatedButton(
                           onPressed: () {
-                            // TODO: 플로깅 시작 → 카메라 or 지도 이동
+                            Navigator.pop(context); // 시트 먼저 닫기
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const PloggingScreen(),
+                              ),
+                            );
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFFB923C),
