@@ -7,6 +7,7 @@ import 'package:sdsd/server/services/hotspots_service.dart';
 import 'profile_screen.dart';
 import 'splash_screen.dart';
 import 'friends_screen.dart';
+import 'dusty_screen.dart';
 import 'add_friends_screen.dart';
 
 import 'camera_screen.dart';
@@ -127,6 +128,8 @@ class _HomeScreenState extends State<HomeScreen> {
             _pendingMapToast = false;
           },
         );
+      case 3: // ← 이 case 임시로 추가
+        return const DustyScreen();
       case 4:
         return const ProfileScreen();
       default:
