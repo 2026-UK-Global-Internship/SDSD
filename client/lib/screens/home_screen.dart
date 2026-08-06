@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'map_screen.dart';
 import 'package:sdsd/server/services/auth_service.dart';
 import 'splash_screen.dart';
+import 'add_friends_screen.dart';
 import 'camera_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -9,7 +10,7 @@ class HomeScreen extends StatefulWidget {
     super.key,
     required this.name,
     this.initialTab = 0,
-    this.showMapToast = false, // ← 추가
+    this.showMapToast = false, // ← 추가R
   });
   final String name;
   final int initialTab; // 처음 열 때 어떤 탭 보여줄지 (0=홈, 1=지도, ...)
@@ -207,7 +208,10 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
               child: GestureDetector(
                 onTap: () {
-                  // TODO: 친구 추가 화면으로 이동
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
+                  );
                 },
                 child: Image.asset(
                   'assets/images/btn_add_friends.png',
