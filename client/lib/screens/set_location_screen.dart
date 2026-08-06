@@ -1,5 +1,6 @@
 //set_location_screen.dart
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -40,6 +41,16 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
   final TextEditingController _descriptionController =
       TextEditingController(); // 위치 설명 입력값을 읽기 위해 추가
   bool _isSubmitting = false;
+
+  // ==========================================
+  // 지도 "준비 완료" 타이밍 문제 방지용
+  // ==========================================
+  // FlutterMap이 화면에 완전히 자리잡기 전에 _mapController.move()를
+  // 호출하면 조용히 실패할 수 있습니다. GPS 응답이 지도보다 먼저 도착하는
+  // 경우를 대비해서, "지도 준비됨" 상태와 "아직 이동 못한 목표 좌표"를
+  // 따로 기억해뒀다가, 둘 다 준비되는 시점에 실제로 이동시킵니다.
+  bool _mapReady = false;
+  LatLng? _pendingMoveTarget;
 
   @override
   void initState() {
@@ -83,8 +94,17 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
       );
 
       if (!mounted) return;
-      _mapController.move(LatLng(position.latitude, position.longitude), 16);
-      print('[SetLocationScreen] ✅ _moveToMyLocation 성공 (실제 GPS 위치로 이동)');
+      final target = LatLng(position.latitude, position.longitude);
+
+      if (_mapReady) {
+        // 지도가 이미 준비돼있으면 바로 이동
+        _mapController.move(target, 16);
+        print('[SetLocationScreen] ✅ _moveToMyLocation 성공 (즉시 이동)');
+      } else {
+        // 아직 지도가 준비 안 됐으면, "onMapReady"가 불릴 때 이동하도록 예약만 해둠
+        _pendingMoveTarget = target;
+        print('[SetLocationScreen] ⏳ 지도 아직 미준비, 목표 좌표 대기 등록 (onMapReady 대기)');
+      }
     } catch (e) {
       print('[SetLocationScreen] ❌ _moveToMyLocation 실패, 기본 좌표(Camden) 유지: $e');
       _showLocationFallbackNotice('위치를 가져오지 못해 기본 위치로 표시합니다');
@@ -111,6 +131,33 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
   String _toCrewSizeValue(String label) => label.toLowerCase();
 
   // ==========================================
+  // 화면에 보이는 핀이 실제로 가리키는 위경도 계산
+  // ==========================================
+  // 핀은 Alignment(0, -0.3) 위치(화면 중앙보다 살짝 위)에 고정 표시되지만,
+  // _mapController.camera.center는 "화면 정중앙"의 좌표입니다.
+  // 이 둘이 다르기 때문에, 화면 픽셀 차이를 실제 위도 차이로 환산해서
+  // "핀이 진짜로 가리키는 좌표"를 계산합니다. (Web Mercator 투영 공식 사용)
+  LatLng _getPinLatLng() {
+    final camera = _mapController.camera;
+    final center = camera.center;
+    final zoom = camera.zoom;
+
+    final screenHeight = MediaQuery.of(context).size.height;
+    // Alignment(0, -0.3): 화면 중앙에서 위쪽으로 (screenHeight/2)의 30%만큼 떨어진 위치
+    final pixelOffsetUp = 0.3 * (screenHeight / 2);
+
+    // Web Mercator 기준, 위도/줌 레벨에 따른 "픽셀당 실제 거리(m)"
+    final metersPerPixel =
+        156543.03392 * cos(center.latitude * pi / 180) / pow(2, zoom);
+    final metersOffset = pixelOffsetUp * metersPerPixel;
+
+    // 화면에서 위쪽으로 갈수록 위도(latitude)는 커집니다 (북쪽)
+    final latOffsetDegrees = metersOffset / 111320.0;
+
+    return LatLng(center.latitude + latOffsetDegrees, center.longitude);
+  }
+
+  // ==========================================
   // Submit 버튼 로직: 사진 + 위치 + 정보를 Firestore/Storage에 저장
   // ==========================================
   Future<void> _handleSubmit() async {
@@ -135,11 +182,11 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
       // 촬영된 사진 파일을 bytes로 읽기 (reportHotspot이 요구하는 형식)
       final photoBytes = await File(widget.photoPath).readAsBytes();
 
-      final center = _mapController.camera.center;
+      final pinLocation = _getPinLatLng(); // ← 변경: 화면 정중앙이 아니라 실제 핀 위치
 
       await _hotspotService.reportHotspot(
-        latitude: center.latitude,
-        longitude: center.longitude,
+        latitude: pinLocation.latitude,
+        longitude: pinLocation.longitude,
         // TODO(ai): 실제 쓰레기 종류 자동판별/선택 UI가 생기면 교체하세요.
         //           지금은 이 화면에 종류 선택 UI가 없어서 기본값으로 신고됩니다.
         trashType: 'general',
@@ -151,7 +198,7 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
       if (!mounted) return;
 
       // 신고 직후 서버 재조회 없이 즉시 지도에 마커 표시 (낙관적 업데이트)
-      MapScreen.addDustSpot(center);
+      MapScreen.addDustSpot(pinLocation);
 
       // 다른 화면들과 일관되게, 하드코딩 대신 실제 사용자 이름을 가져와서 전달
       String displayName = 'User';
@@ -202,6 +249,17 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
             options: MapOptions(
               initialCenter: _initialCenter,
               initialZoom: 16,
+              onMapReady: () {
+                // 지도가 완전히 준비된 시점. 그 사이 GPS 위치를 먼저
+                // 받아놓고 못 옮겼던(대기 중이던) 좌표가 있으면 지금 이동시킵니다.
+                _mapReady = true;
+                print('[SetLocationScreen] → onMapReady 호출됨');
+                if (_pendingMoveTarget != null) {
+                  _mapController.move(_pendingMoveTarget!, 16);
+                  print('[SetLocationScreen] ✅ 대기 중이던 좌표로 이동 완료 (지도 준비 후)');
+                  _pendingMoveTarget = null;
+                }
+              },
               onPositionChanged: (position, hasGesture) {
                 // TODO(backend): 지도 중심 좌표(position.center)를 실제 주소로 변환
                 // reverse geocoding은 백엔드에서 처리 후 응답받아 표시
