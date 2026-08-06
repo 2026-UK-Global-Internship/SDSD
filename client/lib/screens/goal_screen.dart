@@ -355,27 +355,30 @@ class _GoalScreenState extends State<GoalScreen> {
 
           Expanded(
             child: Center(
-              child: SizedBox(
-                width: 280,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    _buildDusty(),
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() => _showPalette = !_showPalette);
-                        },
-                        child: Image.asset(
-                          'assets/images/icons/ic_settings.png',
-                          width: 32,
-                          height: 32,
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: SizedBox(
+                  width: 280,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      _buildDusty(),
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() => _showPalette = !_showPalette);
+                          },
+                          child: Image.asset(
+                            'assets/images/icons/ic_settings.png',
+                            width: 32,
+                            height: 32,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
