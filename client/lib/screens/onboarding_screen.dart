@@ -71,7 +71,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   children: [
                     Image.asset(
                       'assets/images/onboarding_clouds.png',
-                      fit: BoxFit.fitWidth,
+                      fit: BoxFit.cover,
                       alignment: Alignment.topCenter,
                     ),
                     Center(
