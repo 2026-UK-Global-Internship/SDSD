@@ -308,6 +308,45 @@ class HotspotService {
   }
 
   // ==========================================
+  // 4-1. 내가 이미 예약 중인 hotspot 조회 (있으면 반환, 없으면 null)
+  // ==========================================
+  // "이미 진행 중인 플로깅이 있는데 새로 시작하려는" 상황을 화면에서
+  // 미리 걸러내기 위한 함수입니다. users.reservedHotspotId를 먼저 확인합니다.
+  Future<Map<String, dynamic>?> getMyReservedHotspot() async {
+    final sw = Stopwatch()..start();
+    _log('🔵 getMyReservedHotspot 시작');
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('로그인이 필요합니다');
+      }
+
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+      final reservedId = userDoc.data()?['reservedHotspotId'] as String?;
+      _log(
+        '  → reservedHotspotId 확인: $reservedId (${sw.elapsedMilliseconds}ms)',
+      );
+
+      if (reservedId == null) {
+        _log('✅ getMyReservedHotspot 성공: 예약 없음 (${sw.elapsedMilliseconds}ms)');
+        return null;
+      }
+
+      final hotspot = await getHotspotById(reservedId);
+      _log(
+        '✅ getMyReservedHotspot 성공: 기존 예약 발견 (총 ${sw.elapsedMilliseconds}ms)',
+      );
+      return hotspot;
+    } catch (e) {
+      _log('❌ getMyReservedHotspot 실패: $e (${sw.elapsedMilliseconds}ms)');
+      throw Exception('예약 상태 확인 실패: $e');
+    }
+  }
+
+  // ==========================================
   // 5. Hotspot 예약
   // ==========================================
   Future<void> reserveHotspot(String hotspotId) async {
@@ -351,6 +390,7 @@ class HotspotService {
         transaction.update(docRef, {
           'status': 'reserved',
           'reservedBy': currentUser.uid,
+          'reservedAt': FieldValue.serverTimestamp(), // ← 추가: 진행 중 화면 복원용
         });
 
         final userRef = _firestore.collection('users').doc(currentUser.uid);

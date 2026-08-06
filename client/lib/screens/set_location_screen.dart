@@ -51,31 +51,53 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
   // 진입 시 실제 GPS 위치로 지도 초기화 (실패하면 하드코딩된 Camden 좌표 유지)
   // ==========================================
   Future<void> _moveToMyLocation() async {
+    print('[SetLocationScreen] 🔵 _moveToMyLocation 시작');
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+      print('[SetLocationScreen] → 위치 서비스 활성화 여부: $serviceEnabled');
+      if (!serviceEnabled) {
+        _showLocationFallbackNotice('위치 서비스가 꺼져 있어 기본 위치로 표시합니다');
+        return;
+      }
 
       LocationPermission permission = await Geolocator.checkPermission();
+      print('[SetLocationScreen] → 현재 권한 상태: $permission');
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
+        print('[SetLocationScreen] → 권한 재요청 결과: $permission');
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        return; // 권한 없으면 조용히 Camden 대체값 유지
+        _showLocationFallbackNotice('위치 권한이 없어 기본 위치로 표시합니다');
+        return; // 권한 없으면 Camden 대체값 유지 (단, 이제는 사용자에게 이유를 알려줌)
       }
 
+      print('[SetLocationScreen] → getCurrentPosition 요청 중... (최대 5초 대기)');
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.medium,
         ),
       ).timeout(const Duration(seconds: 5));
+      print(
+        '[SetLocationScreen] → 위치 확인 성공: lat=${position.latitude}, lng=${position.longitude}',
+      );
 
       if (!mounted) return;
       _mapController.move(LatLng(position.latitude, position.longitude), 16);
+      print('[SetLocationScreen] ✅ _moveToMyLocation 성공 (실제 GPS 위치로 이동)');
     } catch (e) {
-      // 위치를 못 가져와도 하드코딩된 Camden 좌표로 계속 진행 (신고 자체는 막지 않음)
-      debugPrint('내 위치로 초기화 실패, 기본 좌표 유지: $e');
+      print('[SetLocationScreen] ❌ _moveToMyLocation 실패, 기본 좌표(Camden) 유지: $e');
+      _showLocationFallbackNotice('위치를 가져오지 못해 기본 위치로 표시합니다');
     }
+  }
+
+  // 실제 GPS 대신 하드코딩된 Camden 좌표로 대체될 때, 사용자에게 그 사실을 알림
+  // (예전엔 조용히 넘어가서 "왜 항상 같은 위치지?"가 원인불명이었음)
+  void _showLocationFallbackNotice(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.orange[700]),
+    );
   }
 
   @override

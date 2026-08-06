@@ -25,6 +25,11 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late int _currentTab;
 
+  // 신고 완료 토스트를 "한 번만" 보여주기 위한 상태
+  // widget.showMapToast는 고정값이라 그대로 쓰면 지도 탭을 오갈 때마다
+  // 계속 다시 뜨므로, 한 번 보여준 뒤 false로 꺼지는 별도 변수로 관리합니다.
+  late bool _pendingMapToast;
+
   // ==========================================
   // 활동 카드용 상태
   // ==========================================
@@ -40,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _currentTab = widget.initialTab;
+    _pendingMapToast = widget.showMapToast;
     _loadStats();
   }
 
@@ -110,8 +116,13 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (_currentTab) {
       case 1:
         return MapScreen(
-          showSubmittedToast: widget.showMapToast,
-        ); // const 지우고 파라미터 전달
+          showSubmittedToast: _pendingMapToast,
+          onToastShown: () {
+            // 토스트를 이미 보여줬으니, 다음에 지도 탭에 다시 들어와도
+            // 또 뜨지 않도록 소비(consume) 처리
+            _pendingMapToast = false;
+          },
+        );
       case 4:
         return _buildTempLogout();
       default:

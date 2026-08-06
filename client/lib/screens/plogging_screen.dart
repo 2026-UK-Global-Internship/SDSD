@@ -69,6 +69,40 @@ class _PloggingScreenState extends State<PloggingScreen> {
   DateTime? _completedAt;
 
   @override
+  void initState() {
+    super.initState();
+    _restoreInProgressSession();
+  }
+
+  // ==========================================
+  // 이미 예약된 hotspot(진행 중이던 플로깅)으로 들어온 경우,
+  // "예약된 시각"을 기준으로 지금까지 지난 시간을 역산해서
+  // 타이머를 0:00이 아니라 그 지점부터 이어서 시작합니다.
+  // ==========================================
+  void _restoreInProgressSession() {
+    final reservedAtTimestamp = widget.reservedHotspot?['reservedAt'];
+    if (reservedAtTimestamp == null) {
+      return; // 예약 시각 정보가 없으면(예전 데이터 등) 그냥 0:00부터 시작
+    }
+
+    // Firestore Timestamp 객체이므로 DateTime으로 변환
+    final DateTime reservedAt = reservedAtTimestamp.toDate();
+    final elapsed = DateTime.now().difference(reservedAt);
+
+    setState(() {
+      _startedAt = reservedAt;
+      _elapsedSeconds = elapsed.inSeconds.clamp(
+        0,
+        24 * 60 * 60,
+      ); // 하루 이상은 비정상으로 보고 방어
+    });
+
+    // 예약되어 있다는 것 자체가 "이 조깅이 진행 중"이라는 뜻이므로,
+    // 화면을 열자마자 타이머도 자동으로 이어서 흘러가게 시작합니다.
+    _toggleTimer();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
