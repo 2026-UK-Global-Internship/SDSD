@@ -1,6 +1,9 @@
+//home_screen.dart
 import 'package:flutter/material.dart';
 import 'map_screen.dart';
 import 'package:sdsd/server/services/auth_service.dart';
+import 'package:sdsd/server/services/flogging_service.dart';
+import 'package:sdsd/server/services/hotspots_service.dart';
 import 'splash_screen.dart';
 import 'camera_screen.dart';
 
@@ -22,10 +25,47 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late int _currentTab;
 
+  // ==========================================
+  // 활동 카드용 상태
+  // ==========================================
+  final FloggingService _floggingService = FloggingService();
+  final HotspotService _hotspotService = HotspotService();
+
+  int _weeklyDays = 0;
+  int _weeklyCleans = 0;
+  double _cleanlinessPercent = 0;
+  bool _isLoadingStats = true;
+
   @override
   void initState() {
     super.initState();
     _currentTab = widget.initialTab;
+    _loadStats();
+  }
+
+  // ==========================================
+  // 이번 주 활동 통계 + 전체 청결도 불러오기
+  // ==========================================
+  Future<void> _loadStats() async {
+    try {
+      // 두 요청을 동시에 진행 (하나씩 순서대로 기다릴 필요 없음)
+      final results = await Future.wait([
+        _floggingService.getWeeklyStats(),
+        _hotspotService.getCleanlinessPercentage(),
+      ]);
+
+      if (!mounted) return;
+      setState(() {
+        _weeklyDays = (results[0] as Map<String, int>)['days'] ?? 0;
+        _weeklyCleans = (results[0] as Map<String, int>)['cleans'] ?? 0;
+        _cleanlinessPercent = results[1] as double;
+        _isLoadingStats = false;
+      });
+    } catch (e) {
+      // 홈 화면 진입 자체를 막을 정도는 아니라서, 조용히 0으로 표시하고 넘어감
+      if (!mounted) return;
+      setState(() => _isLoadingStats = false);
+    }
   }
 
   @override
@@ -234,6 +274,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ---------- 활동 카드 ----------
   Widget _buildActivityCard() {
+    // 로딩 중엔 '-' 로 표시 (0을 보여주면 "진짜 0회"인지 "아직 안 불러왔는지" 헷갈림)
+    final String daysText = _isLoadingStats ? '-' : '$_weeklyDays';
+    final String cleansText = _isLoadingStats ? '-' : '$_weeklyCleans';
+    final String percentText = _isLoadingStats
+        ? '-'
+        : '${_cleanlinessPercent.round()}%';
+    final double progressValue = _isLoadingStats
+        ? 0
+        : (_cleanlinessPercent / 100).clamp(0, 1);
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -293,9 +343,9 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 1),
             Row(
               children: [
-                _buildStat('5', 'days'),
+                _buildStat(daysText, 'days'), // ← 실제 이번 주 활동일수
                 const SizedBox(width: 120),
-                _buildStat('7', 'cleans'),
+                _buildStat(cleansText, 'cleans'), // ← 실제 이번 주 청소 횟수
               ],
             ),
             const SizedBox(height: 18),
@@ -311,9 +361,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const Spacer(),
-                const Text(
-                  '75%',
-                  style: TextStyle(
+                Text(
+                  percentText, // ← 실제 전체 hotspot 청소완료 비율
+                  style: const TextStyle(
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
@@ -326,7 +376,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: LinearProgressIndicator(
-                value: 0.75,
+                value: progressValue, // ← 실제 비율로 채워짐
                 minHeight: 14,
                 backgroundColor: Colors.white.withValues(alpha: 0.35),
                 valueColor: const AlwaysStoppedAnimation(Colors.white),
@@ -395,6 +445,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ---------- Weekly Ranking (하드코딩 유지) ----------
+  // 다른 사용자의 조깅/청소 기록은 Security Rules상 본인만 읽을 수 있어서
+  // 지금 구조로는 실시간 랭킹을 만들 수 없습니다.
+  // 나중에 랭킹용 공개 컬렉션(예: leaderboard)이나 별도 Security Rules를
+  // 설계하게 되면 이 부분을 실제 데이터로 교체하면 됩니다.
   Widget _buildPodium() {
     return Stack(
       alignment: Alignment.bottomCenter,

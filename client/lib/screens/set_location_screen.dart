@@ -1,8 +1,13 @@
+//set_location_screen.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import 'home_screen.dart';
 import 'map_screen.dart';
+import 'package:sdsd/server/services/hotspots_service.dart';
+import 'package:sdsd/server/services/auth_service.dart';
 
 class SetLocationScreen extends StatefulWidget {
   const SetLocationScreen({super.key, required this.photoPath});
@@ -20,13 +25,148 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
   // TODO(backend): 사용자 현재 GPS 위치로 초기화
   static const LatLng _initialCenter = LatLng(51.5394, -0.1426);
   // 선택된 Cleanup size ('Solo', 'Duo', 'Squad', 'More')
-  // TODO(backend): Firestore hotspot 문서의 size 필드로 저장
   String? _selectedSize;
   // More 선택 시 인원 수 (기본 5명)
-  // TODO(backend): Firestore hotspot 문서의 memberCount 필드로 저장
+  // TODO(backend): 스키마에 memberCount 필드가 추가되면 함께 저장
   int _moreCount = 5;
   // 현재 지도 중심의 주소
   String _currentAddress = 'Loading address...';
+
+  // ==========================================
+  // 백엔드 연결용 상태
+  // ==========================================
+  final HotspotService _hotspotService = HotspotService();
+  final AuthService _authService = AuthService();
+  final TextEditingController _descriptionController =
+      TextEditingController(); // 위치 설명 입력값을 읽기 위해 추가
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _moveToMyLocation();
+  }
+
+  // ==========================================
+  // 진입 시 실제 GPS 위치로 지도 초기화 (실패하면 하드코딩된 Camden 좌표 유지)
+  // ==========================================
+  Future<void> _moveToMyLocation() async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return; // 권한 없으면 조용히 Camden 대체값 유지
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+        ),
+      ).timeout(const Duration(seconds: 5));
+
+      if (!mounted) return;
+      _mapController.move(LatLng(position.latitude, position.longitude), 16);
+    } catch (e) {
+      // 위치를 못 가져와도 하드코딩된 Camden 좌표로 계속 진행 (신고 자체는 막지 않음)
+      debugPrint('내 위치로 초기화 실패, 기본 좌표 유지: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  // crewSize 값을 HotspotService가 요구하는 형식으로 변환
+  // ('Solo' → 'solo' 등)
+  String _toCrewSizeValue(String label) => label.toLowerCase();
+
+  // ==========================================
+  // Submit 버튼 로직: 사진 + 위치 + 정보를 Firestore/Storage에 저장
+  // ==========================================
+  Future<void> _handleSubmit() async {
+    if (_selectedSize == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Cleanup size를 선택해주세요')));
+      return;
+    }
+
+    final description = _descriptionController.text.trim();
+    if (description.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('위치 설명을 입력해주세요')));
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      // 촬영된 사진 파일을 bytes로 읽기 (reportHotspot이 요구하는 형식)
+      final photoBytes = await File(widget.photoPath).readAsBytes();
+
+      final center = _mapController.camera.center;
+
+      await _hotspotService.reportHotspot(
+        latitude: center.latitude,
+        longitude: center.longitude,
+        // TODO(ai): 실제 쓰레기 종류 자동판별/선택 UI가 생기면 교체하세요.
+        //           지금은 이 화면에 종류 선택 UI가 없어서 기본값으로 신고됩니다.
+        trashType: 'general',
+        locationDescription: description,
+        crewSize: _toCrewSizeValue(_selectedSize!),
+        photoBytes: photoBytes,
+      );
+
+      if (!mounted) return;
+
+      // 신고 직후 서버 재조회 없이 즉시 지도에 마커 표시 (낙관적 업데이트)
+      MapScreen.addDustSpot(center);
+
+      // 다른 화면들과 일관되게, 하드코딩 대신 실제 사용자 이름을 가져와서 전달
+      String displayName = 'User';
+      final uid = _authService.currentUserId;
+      if (uid != null) {
+        try {
+          final profile = await _authService.getUserProfile(uid);
+          displayName = profile['displayName'] as String? ?? 'User';
+        } catch (_) {
+          // 이름 조회 실패해도 신고 자체는 이미 성공했으니 기본값으로 계속 진행
+        }
+      }
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => HomeScreen(
+            name: displayName,
+            initialTab: 1, // 지도 탭
+            showMapToast: true, // ← 추가: "Report submitted!" 토스트 표시
+          ),
+        ),
+        (route) => false, // 이전 화면 모두 제거
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red[600],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -176,7 +316,9 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: TextField(
-                              // TODO(backend): 사용자 입력값을 Firestore에 저장
+                              controller:
+                                  _descriptionController, // ← 추가: 입력값을 읽기 위해 연결
+                              enabled: !_isSubmitting,
                               decoration: InputDecoration(
                                 hintText: 'Describe the location ...',
                                 hintStyle: TextStyle(
@@ -234,43 +376,9 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
                     const SizedBox(height: 20),
                     // Submit 버튼
                     GestureDetector(
-                      onTap: () {
-                        // 유효성 검사
-                        if (_selectedSize == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Cleanup size를 선택해주세요'),
-                            ),
-                          );
-                          return;
-                        }
-
-                        // TODO(backend): Firestore hotspots 컬렉션에 저장
-                        // - photoPath: widget.photoPath (사진 경로, 실제로는 Firebase Storage에 업로드 후 URL 저장)
-                        // - location: 지도 중심 좌표 (_mapController.camera.center)
-                        // - address: 백엔드에서 역지오코딩 후 저장
-                        // - description: 위치 설명 입력값
-                        // - size: _selectedSize (Solo/Duo/Squad/More)
-                        // - memberCount: _selectedSize == 'More' ? _moreCount : null
-                        // - createdBy: 현재 로그인한 사용자 uid
-                        // - createdAt: 서버 타임스탬프
-
-                        // TODO: Submit 이후 화면으로 이동 (스크린샷 대기 중)
-                        // 임시로 홈으로 돌아가기 (카메라 → 확인 → Set Location 모두 pop)
-                        // 모든 화면 닫고 HomeScreen 지도 탭으로 이동
-                        // 새 핫스팟 마커 추가 (임시 - 앱 실행 중에만 유지)
-                        // TODO(backend): 실제로는 Firestore에 저장 후 스트림으로 자동 반영
-                        MapScreen.addDustSpot(_mapController.camera.center);
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(
-                            builder: (_) => const HomeScreen(
-                              name: 'User', // TODO(backend): 실제 사용자 이름으로 교체
-                              initialTab: 1, // 지도 탭
-                            ),
-                          ),
-                          (route) => false, // 이전 화면 모두 제거
-                        );
-                      },
+                      onTap: _isSubmitting
+                          ? null
+                          : _handleSubmit, // ← 변경: 저장 로직 연결
                       child: Container(
                         width: double.infinity,
                         height: 56,
@@ -282,16 +390,27 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
                             colors: [Color(0xFFF472B6), Color(0xFFFBBF24)],
                           ),
                         ),
-                        child: const Center(
-                          child: Text(
-                            'Submit',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w700,
-                              fontSize: 18,
-                              color: Colors.white,
-                            ),
-                          ),
+                        child: Center(
+                          child: _isSubmitting
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : const Text(
+                                  'Submit',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 18,
+                                    color: Colors.white,
+                                  ),
+                                ),
                         ),
                       ),
                     ),
@@ -310,15 +429,17 @@ class _SetLocationScreenState extends State<SetLocationScreen> {
   Widget _buildSizeButton(String label) {
     final bool isSelected = _selectedSize == label;
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedSize = label;
-        });
-        // More 선택 시 인원 조정 팝업 열기
-        if (label == 'More') {
-          _showMoreCountDialog();
-        }
-      },
+      onTap: _isSubmitting
+          ? null
+          : () {
+              setState(() {
+                _selectedSize = label;
+              });
+              // More 선택 시 인원 조정 팝업 열기
+              if (label == 'More') {
+                _showMoreCountDialog();
+              }
+            },
       child: Container(
         height: 48,
         decoration: BoxDecoration(

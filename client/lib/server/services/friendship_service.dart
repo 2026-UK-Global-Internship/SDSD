@@ -1,330 +1,391 @@
+//hospots_service.dart
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
+import 'character_service.dart';
 
-class FriendshipService {
+class HotspotService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final CharacterService _characterService = CharacterService();
 
-  String get _myUid {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) {
-      throw Exception('로그인이 필요합니다');
-    }
-    return uid;
-  }
+  static const String _photoBucket = 'photos';
+
+  // 인원 규모로 선택 가능한 값 (밸런스/기획 조정 시 이 목록만 바꾸면 됨)
+  static const List<String> _validCrewSizes = ['solo', 'duo', 'squad', 'more'];
 
   // ==========================================
-  // 1. 친구 요청 보내기
+  // 사진 업로드 (Supabase Storage) - 이 파일 안에서만 쓰는 내부 함수
   // ==========================================
-  // 설계 노트:
-  //   Security Rules상 user1Id는 반드시 "요청을 보낸 사람(나)"이어야 합니다.
-  //   그래서 문서 ID를 알파벳순으로 정렬하지 않고, 자동 생성 ID를 씁니다.
-  //   대신 "이미 어느 방향으로든 관계가 있는지"를 코드에서 먼저 확인합니다.
-  Future<void> sendFriendRequest(String targetUid) async {
+  // 실패해도 예외를 던지지 않고 빈 문자열을 반환합니다.
+  // → 사진 업로드 문제 때문에 신고 자체가 막히지 않도록 하기 위함입니다.
+  Future<String> _uploadPhoto(String path, Uint8List bytes) async {
     try {
-      final myUid = _myUid;
+      final supabase = Supabase.instance.client;
 
-      if (targetUid == myUid) {
-        throw Exception('자기 자신에게는 친구 요청을 보낼 수 없습니다');
-      }
+      await supabase.storage
+          .from(_photoBucket)
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: const FileOptions(cacheControl: '3600', upsert: true),
+          );
 
-      // 이미 관계(어느 방향이든, pending이든 accepted든)가 있는지 확인
-      final existing = await _findFriendshipDoc(myUid, targetUid);
-      if (existing != null) {
-        final status = existing.data()!['status'];
-        if (status == 'accepted') {
-          throw Exception('이미 친구입니다');
-        } else {
-          throw Exception('이미 친구 요청이 진행 중입니다');
-        }
-      }
-
-      await _firestore.collection('friendships').add({
-        'user1Id': myUid, // 요청을 보낸 사람 (Security Rules 요구사항)
-        'user2Id': targetUid, // 요청을 받은 사람
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      print('✓ 친구 요청 전송 성공: $myUid → $targetUid');
+      return supabase.storage.from(_photoBucket).getPublicUrl(path);
     } catch (e) {
-      throw Exception('친구 요청 실패: $e');
+      print('⚠️ 사진 업로드 실패, 사진 없이 계속 진행합니다: $e');
+      return '';
     }
   }
 
   // ==========================================
-  // 내부 헬퍼: 두 사용자 사이의 관계 문서를 양방향으로 검색
+  // 1. Hotspot 신고 (쓰레기 위치 등록)
   // ==========================================
-  Future<QueryDocumentSnapshot<Map<String, dynamic>>?> _findFriendshipDoc(
-    String uidA,
-    String uidB,
-  ) async {
-    // 방향 1: A가 B에게 보낸 경우
-    final forward = await _firestore
-        .collection('friendships')
-        .where('user1Id', isEqualTo: uidA)
-        .where('user2Id', isEqualTo: uidB)
-        .limit(1)
-        .get();
-    if (forward.docs.isNotEmpty) return forward.docs.first;
-
-    // 방향 2: B가 A에게 보낸 경우
-    final backward = await _firestore
-        .collection('friendships')
-        .where('user1Id', isEqualTo: uidB)
-        .where('user2Id', isEqualTo: uidA)
-        .limit(1)
-        .get();
-    if (backward.docs.isNotEmpty) return backward.docs.first;
-
-    return null;
-  }
-
-  // ==========================================
-  // 2. 친구 요청 수락
-  // ==========================================
-  // Security Rules 요구사항: auth.uid == user2Id(받은 사람) && 기존 status == "pending"
-  Future<void> acceptFriendRequest(String friendshipId) async {
-    try {
-      final myUid = _myUid;
-
-      final doc = await _firestore
-          .collection('friendships')
-          .doc(friendshipId)
-          .get();
-      if (!doc.exists) {
-        throw Exception('존재하지 않는 요청입니다');
-      }
-
-      final data = doc.data()!;
-      if (data['user2Id'] != myUid) {
-        throw Exception('본인에게 온 요청만 수락할 수 있습니다');
-      }
-      if (data['status'] != 'pending') {
-        throw Exception('이미 처리된 요청입니다');
-      }
-
-      await _firestore.collection('friendships').doc(friendshipId).update({
-        'status': 'accepted',
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      print('✓ 친구 요청 수락: $friendshipId');
-    } catch (e) {
-      throw Exception('친구 요청 수락 실패: $e');
-    }
-  }
-
-  // ==========================================
-  // 3. 친구 관계 삭제 (거절 / 요청 취소 / 친구 끊기 — 모두 동일)
-  // ==========================================
-  // Security Rules상 user1Id, user2Id 둘 다 삭제 권한이 있어서
-  // "거절"(받은 사람이 삭제) / "취소"(보낸 사람이 삭제) / "절교"(둘 다 가능)를
-  // 하나의 함수로 처리할 수 있습니다.
-  Future<void> deleteFriendship(String friendshipId) async {
-    try {
-      final myUid = _myUid;
-
-      final doc = await _firestore
-          .collection('friendships')
-          .doc(friendshipId)
-          .get();
-      if (!doc.exists) {
-        throw Exception('존재하지 않는 관계입니다');
-      }
-
-      final data = doc.data()!;
-      if (data['user1Id'] != myUid && data['user2Id'] != myUid) {
-        throw Exception('본인과 관련된 관계만 삭제할 수 있습니다');
-      }
-
-      await _firestore.collection('friendships').doc(friendshipId).delete();
-      print('✓ 친구 관계 삭제: $friendshipId');
-    } catch (e) {
-      throw Exception('친구 관계 삭제 실패: $e');
-    }
-  }
-
-  // ==========================================
-  // 4. 내 친구 목록 (accepted 상태만)
-  // ==========================================
-  // user1Id 기준, user2Id 기준 두 번 조회해서 합칩니다.
-  // (Firestore는 서로 다른 필드에 대한 OR 조건을 한 번의 쿼리로 못 하기 때문)
-  Future<List<Map<String, dynamic>>> getMyFriends() async {
-    try {
-      final myUid = _myUid;
-
-      final asUser1 = await _firestore
-          .collection('friendships')
-          .where('user1Id', isEqualTo: myUid)
-          .where('status', isEqualTo: 'accepted')
-          .get();
-
-      final asUser2 = await _firestore
-          .collection('friendships')
-          .where('user2Id', isEqualTo: myUid)
-          .where('status', isEqualTo: 'accepted')
-          .get();
-
-      final results = <Map<String, dynamic>>[];
-
-      for (final doc in asUser1.docs) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        data['friendUid'] = data['user2Id']; // 상대방 uid를 바로 알 수 있게 추가
-        results.add(data);
-      }
-
-      for (final doc in asUser2.docs) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        data['friendUid'] = data['user1Id'];
-        results.add(data);
-      }
-
-      return results;
-    } catch (e) {
-      throw Exception('친구 목록 조회 실패: $e');
-    }
-  }
-
-  // ==========================================
-  // 5. 나에게 온 대기중인 요청 목록
-  // ==========================================
-  // ⚠️ 이 쿼리를 쓰려면 Firestore에 (user2Id Asc, status Asc) Composite Index가
-  //    새로 필요합니다. 지난번에 만든 인덱스는 (user1Id, status)라 이 쿼리에는 못 씁니다.
-  Future<List<Map<String, dynamic>>> getIncomingRequests() async {
-    try {
-      final myUid = _myUid;
-
-      final snapshot = await _firestore
-          .collection('friendships')
-          .where('user2Id', isEqualTo: myUid)
-          .where('status', isEqualTo: 'pending')
-          .get();
-
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        data['fromUid'] = data['user1Id']; // 요청 보낸 사람
-        return data;
-      }).toList();
-    } catch (e) {
-      throw Exception('받은 요청 조회 실패: $e');
-    }
-  }
-
-  // ==========================================
-  // 6. 내가 보낸 대기중인 요청 목록
-  // ==========================================
-  // 기존에 만든 (user1Id Asc, status Asc) 인덱스를 그대로 사용 가능
-  Future<List<Map<String, dynamic>>> getOutgoingRequests() async {
-    try {
-      final myUid = _myUid;
-
-      final snapshot = await _firestore
-          .collection('friendships')
-          .where('user1Id', isEqualTo: myUid)
-          .where('status', isEqualTo: 'pending')
-          .get();
-
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        data['toUid'] = data['user2Id']; // 요청 받은 사람
-        return data;
-      }).toList();
-    } catch (e) {
-      throw Exception('보낸 요청 조회 실패: $e');
-    }
-  }
-
-  // ==========================================
-  // 7. 특정 사용자와 나의 관계 상태 확인 (버튼 UI용)
-  // ==========================================
-  // 반환값: 'none' | 'pending_outgoing' | 'pending_incoming' | 'accepted' | 'self'
-  Future<Map<String, dynamic>> getFriendshipStatus(String targetUid) async {
-    try {
-      final myUid = _myUid;
-
-      if (targetUid == myUid) {
-        return {'status': 'self', 'friendshipId': null};
-      }
-
-      final doc = await _findFriendshipDoc(myUid, targetUid);
-      if (doc == null) {
-        return {'status': 'none', 'friendshipId': null};
-      }
-
-      final data = doc.data()!;
-      if (data['status'] == 'accepted') {
-        return {'status': 'accepted', 'friendshipId': doc.id};
-      }
-
-      // pending인데, 내가 보낸 건지 상대가 보낸 건지 구분
-      if (data['user1Id'] == myUid) {
-        return {'status': 'pending_outgoing', 'friendshipId': doc.id};
-      } else {
-        return {'status': 'pending_incoming', 'friendshipId': doc.id};
-      }
-    } catch (e) {
-      throw Exception('관계 상태 조회 실패: $e');
-    }
-  }
-
-  // ==========================================
-  // 8. 닉네임으로 사용자 검색 (친구 추가용, 앞부분 일치·대소문자 무시)
-  // ==========================================
-  // 예: "test" 검색 → "TestUser", "test123" 등을 찾음 (대소문자 무시)
-  //     "estUser"처럼 중간부터 검색은 안 됨 (Firestore의 근본적인 제약)
-  //
-  // ⚠️ 이 함수를 쓰려면 users 컬렉션 문서에 'displayNameLower' 필드가
-  //    있어야 합니다. auth_service.dart의 회원가입/이름변경 시점에
-  //    displayName.toLowerCase()를 함께 저장하도록 되어 있는지 확인해주세요.
-  Future<List<Map<String, dynamic>>> searchUsersByName(
-    String query, {
-    int limit = 20,
+  // Security Rules 요구사항:
+  //   - reporterId == 현재 로그인한 사용자 uid
+  //   - status는 반드시 "open"으로 시작
+  //   - location은 GeoPoint 타입이어야 함
+  Future<String> reportHotspot({
+    required double latitude,
+    required double longitude,
+    required String trashType,
+    required String locationDescription,
+    required String crewSize,
+    Uint8List? photoBytes,
   }) async {
     try {
-      final trimmedQuery = query.trim();
-
-      if (trimmedQuery.isEmpty) {
-        throw Exception('검색어를 입력해주세요');
-      }
-      if (trimmedQuery.length < 2) {
-        throw Exception('검색어는 2글자 이상 입력해주세요');
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('로그인이 필요합니다');
       }
 
-      final lowerQuery = trimmedQuery.toLowerCase();
-      final myUid = _auth.currentUser?.uid;
+      if (trashType.isEmpty) {
+        throw Exception('쓰레기 종류를 입력해주세요');
+      }
 
-      // '\uf8ff'는 유니코드에서 거의 가장 마지막 순서의 특수 문자입니다.
-      // [lowerQuery, lowerQuery + '\uf8ff'] 범위 검색은
-      // "lowerQuery로 시작하는 모든 문자열"과 정확히 일치합니다.
+      final trimmedDescription = locationDescription.trim();
+      if (trimmedDescription.isEmpty) {
+        throw Exception('장소 설명을 입력해주세요');
+      }
+      if (trimmedDescription.length > 200) {
+        throw Exception('장소 설명은 200자 이하여야 합니다');
+      }
+
+      if (!_validCrewSizes.contains(crewSize)) {
+        throw Exception('인원 규모는 solo, duo, squad, more 중 하나여야 합니다');
+      }
+
+      if (latitude < -90 || latitude > 90) {
+        throw Exception('올바른 위도 값이 아닙니다 (-90 ~ 90)');
+      }
+      if (longitude < -180 || longitude > 180) {
+        throw Exception('올바른 경도 값이 아닙니다 (-180 ~ 180)');
+      }
+
+      // 문서 ID를 미리 확보 (사진 업로드 경로에 사용하기 위함)
+      final docRef = _firestore.collection('hotspots').doc();
+
+      String photoUrl = '';
+      if (photoBytes != null) {
+        photoUrl = await _uploadPhoto(
+          'hotspots/${docRef.id}/photo.jpg',
+          photoBytes,
+        );
+      }
+
+      await docRef.set({
+        'reporterId': currentUser.uid,
+        'photoUrl': photoUrl,
+        'trashType': trashType,
+        'locationDescription': trimmedDescription,
+        'crewSize': crewSize,
+        'location': GeoPoint(latitude, longitude),
+        'status': 'open', // Security Rules가 요구하는 초기값
+        'reservedBy': null,
+        'ttl': null,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      print('✓ Hotspot 신고 성공: ${docRef.id}');
+      return docRef.id;
+    } catch (e) {
+      throw Exception('Hotspot 신고 실패: $e');
+    }
+  }
+
+  // ==========================================
+  // 2. 전체 Hotspot 목록 조회 (최신순)
+  // ==========================================
+  Future<List<Map<String, dynamic>>> getAllHotspots() async {
+    try {
       final snapshot = await _firestore
-          .collection('users')
-          .where('displayNameLower', isGreaterThanOrEqualTo: lowerQuery)
-          .where('displayNameLower', isLessThanOrEqualTo: '$lowerQuery\uf8ff')
-          .limit(limit)
+          .collection('hotspots')
+          .orderBy('createdAt', descending: true)
           .get();
 
-      final results = <Map<String, dynamic>>[];
-
-      for (final doc in snapshot.docs) {
-        if (doc.id == myUid) continue; // 검색 결과에 나 자신 제외
-
+      return snapshot.docs.map((doc) {
         final data = doc.data();
-        results.add({
-          'uid': doc.id,
-          'displayName': data['displayName'],
-          'level': data['character']?['level'] ?? 1,
-        });
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      throw Exception('Hotspot 목록 조회 실패: $e');
+    }
+  }
+
+  // ==========================================
+  // 2-1. 전체 청결도(청소완료 비율) 조회 (홈 화면 프로그레스바용)
+  // ==========================================
+  // hotspots 컬렉션은 (신고자 본인 제한 없이) 누구나 읽을 수 있어서
+  // — 지도에 모든 사용자의 신고 내역을 보여줘야 하니까요 — 이 통계는
+  // "동네" 단위가 아니라 앱 전체 hotspot 기준입니다.
+  // (동네 경계라는 개념이 스키마에 없어서, 전역 비율로 근사합니다)
+  Future<double> getCleanlinessPercentage() async {
+    try {
+      final all = await getAllHotspots();
+
+      if (all.isEmpty) {
+        return 0; // 신고된 곳이 하나도 없으면 0%로 처리
       }
 
-      return results;
+      final cleanedCount = all
+          .where((hotspot) => hotspot['status'] == 'cleaned')
+          .length;
+
+      return (cleanedCount / all.length) * 100;
     } catch (e) {
-      throw Exception('사용자 검색 실패: $e');
+      throw Exception('청결도 조회 실패: $e');
+    }
+  }
+
+  // ==========================================
+  // 3. "open" 상태인 Hotspot만 조회 (지도 표시용)
+  // ==========================================
+  Future<List<Map<String, dynamic>>> getOpenHotspots() async {
+    try {
+      final snapshot = await _firestore
+          .collection('hotspots')
+          .where('status', isEqualTo: 'open')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      throw Exception('Open Hotspot 조회 실패: $e');
+    }
+  }
+
+  // ==========================================
+  // 3-1. 지도 화면에 표시할 Hotspot 조회 (현재 보이는 영역 기준)
+  // ==========================================
+  Future<List<Map<String, dynamic>>> getHotspotsForMap({
+    required double swLat,
+    required double swLng,
+    required double neLat,
+    required double neLng,
+    bool onlyOpen = true,
+  }) async {
+    try {
+      if (swLat > neLat) {
+        throw Exception('남서쪽 위도가 북동쪽 위도보다 클 수 없습니다');
+      }
+      if (swLng > neLng) {
+        throw Exception('경도 범위가 올바르지 않습니다 (날짜 변경선 근처는 미지원)');
+      }
+
+      final allHotspots = onlyOpen
+          ? await getOpenHotspots()
+          : await getAllHotspots();
+
+      return allHotspots.where((hotspot) {
+        final GeoPoint location = hotspot['location'] as GeoPoint;
+        return location.latitude >= swLat &&
+            location.latitude <= neLat &&
+            location.longitude >= swLng &&
+            location.longitude <= neLng;
+      }).toList();
+    } catch (e) {
+      throw Exception('지도 영역 Hotspot 조회 실패: $e');
+    }
+  }
+
+  // ==========================================
+  // 4. 특정 Hotspot 상세 조회
+  // ==========================================
+  Future<Map<String, dynamic>> getHotspotById(String hotspotId) async {
+    try {
+      final doc = await _firestore.collection('hotspots').doc(hotspotId).get();
+
+      if (!doc.exists) {
+        throw Exception('존재하지 않는 Hotspot입니다');
+      }
+
+      final data = doc.data()!;
+      data['id'] = doc.id;
+      return data;
+    } catch (e) {
+      throw Exception('Hotspot 조회 실패: $e');
+    }
+  }
+
+  // ==========================================
+  // 5. Hotspot 예약 (open → reserved)
+  // ==========================================
+  Future<void> reserveHotspot(String hotspotId) async {
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('로그인이 필요합니다');
+      }
+
+      final hotspot = await getHotspotById(hotspotId);
+      if (hotspot['status'] != 'open') {
+        throw Exception('이미 예약되었거나 청소 완료된 위치입니다');
+      }
+
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+      final existingReservation = userDoc.data()?['reservedHotspotId'];
+      if (existingReservation != null) {
+        throw Exception('이미 예약 중인 위치가 있습니다. 먼저 청소를 완료하거나 취소해주세요');
+      }
+
+      await _firestore.runTransaction((transaction) async {
+        final docRef = _firestore.collection('hotspots').doc(hotspotId);
+        final snapshot = await transaction.get(docRef);
+
+        if (!snapshot.exists) {
+          throw Exception('존재하지 않는 Hotspot입니다');
+        }
+
+        final currentStatus = snapshot.data()!['status'];
+        if (currentStatus != 'open') {
+          throw Exception('이미 다른 사람이 예약했습니다');
+        }
+
+        transaction.update(docRef, {
+          'status': 'reserved',
+          'reservedBy': currentUser.uid,
+        });
+
+        final userRef = _firestore.collection('users').doc(currentUser.uid);
+        transaction.update(userRef, {'reservedHotspotId': hotspotId});
+      });
+
+      print('✓ Hotspot 예약 성공: $hotspotId');
+    } catch (e) {
+      throw Exception('Hotspot 예약 실패: $e');
+    }
+  }
+
+  // ==========================================
+  // 6. 예약 취소 (reserved → open)
+  // ==========================================
+  Future<void> cancelReservation(String hotspotId) async {
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('로그인이 필요합니다');
+      }
+
+      final hotspot = await getHotspotById(hotspotId);
+
+      if (hotspot['status'] != 'reserved') {
+        throw Exception('예약된 상태가 아닙니다');
+      }
+
+      if (hotspot['reservedBy'] != currentUser.uid) {
+        throw Exception('본인이 예약한 Hotspot만 취소할 수 있습니다');
+      }
+
+      await _firestore.runTransaction((transaction) async {
+        final docRef = _firestore.collection('hotspots').doc(hotspotId);
+
+        transaction.update(docRef, {'status': 'open', 'reservedBy': null});
+
+        final userRef = _firestore.collection('users').doc(currentUser.uid);
+        transaction.update(userRef, {'reservedHotspotId': null});
+      });
+
+      print('✓ 예약 취소 성공: $hotspotId');
+    } catch (e) {
+      throw Exception('예약 취소 실패: $e');
+    }
+  }
+
+  // ==========================================
+  // 7. 청소 완료 처리 (reserved → cleaned)
+  // ==========================================
+  Future<Map<String, dynamic>> completeCleaning(String hotspotId) async {
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('로그인이 필요합니다');
+      }
+
+      final hotspot = await getHotspotById(hotspotId);
+
+      if (hotspot['status'] != 'reserved') {
+        throw Exception('예약된 상태가 아닙니다');
+      }
+
+      if (hotspot['reservedBy'] != currentUser.uid) {
+        throw Exception('본인이 예약한 Hotspot만 청소 완료 처리할 수 있습니다');
+      }
+
+      await _firestore.runTransaction((transaction) async {
+        final docRef = _firestore.collection('hotspots').doc(hotspotId);
+
+        transaction.update(docRef, {'status': 'cleaned'});
+
+        final userRef = _firestore.collection('users').doc(currentUser.uid);
+        transaction.update(userRef, {'reservedHotspotId': null});
+      });
+
+      print('✓ 청소 완료 처리 성공: $hotspotId');
+
+      await _characterService.grantOpportunity(
+        currentUser.uid,
+        type: 'pet',
+        amount: 1,
+      );
+
+      return {'hotspotId': hotspotId, 'petChanceGranted': 1};
+    } catch (e) {
+      throw Exception('청소 완료 처리 실패: $e');
+    }
+  }
+
+  // ==========================================
+  // 8. Hotspot 삭제 (신고자만, open 상태일 때만 가능)
+  // ==========================================
+  Future<void> deleteHotspot(String hotspotId) async {
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('로그인이 필요합니다');
+      }
+
+      final hotspot = await getHotspotById(hotspotId);
+      if (hotspot['reporterId'] != currentUser.uid) {
+        throw Exception('본인이 신고한 Hotspot만 삭제할 수 있습니다');
+      }
+
+      if (hotspot['status'] != 'open') {
+        throw Exception('이미 예약되었거나 청소 완료된 위치는 삭제할 수 없습니다');
+      }
+
+      await _firestore.collection('hotspots').doc(hotspotId).delete();
+      print('✓ Hotspot 삭제 성공: $hotspotId');
+    } catch (e) {
+      throw Exception('Hotspot 삭제 실패: $e');
     }
   }
 }
