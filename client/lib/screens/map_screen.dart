@@ -10,9 +10,14 @@ import 'package:sdsd/server/services/hotspots_service.dart';
 import 'package:sdsd/server/services/auth_service.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key, this.showSubmittedToast = false});
+  const MapScreen({
+    super.key,
+    this.showSubmittedToast = false,
+    this.onToastShown,
+  });
 
   final bool showSubmittedToast; // true면 진입 시 "Report submitted!" 표시
+  final VoidCallback? onToastShown; // 토스트를 보여준 직후 호출 (부모가 상태를 "소비"할 수 있게)
 
   // ⭐ static이라 앱 실행 중에는 상태 유지됨
   // 신고 직후, 서버에 다시 물어보지 않고도 즉시 지도에 마커를 하나 더
@@ -60,6 +65,7 @@ class _MapScreenState extends State<MapScreen> {
       // 화면 그려진 후 실행 (안 그러면 Overlay 접근 에러)
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _showReportSubmittedToast();
+        widget.onToastShown?.call(); // 부모(HomeScreen)에게 "다 보여줬다" 알림
       });
     }
   }
@@ -68,6 +74,7 @@ class _MapScreenState extends State<MapScreen> {
   // 서버에서 "open" 상태인 hotspot 목록 불러오기
   // ==========================================
   Future<void> _loadHotspots() async {
+    print('[MapScreen] 🔵 _loadHotspots 시작');
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -75,6 +82,13 @@ class _MapScreenState extends State<MapScreen> {
 
     try {
       final hotspots = await _hotspotService.getOpenHotspots();
+      print('[MapScreen] → getOpenHotspots 결과: ${hotspots.length}건');
+      for (final h in hotspots) {
+        print(
+          '[MapScreen]    - id=${h['id']}, status=${h['status']}, location=${h['location']}',
+        );
+      }
+
       if (!mounted) return;
       setState(() {
         _hotspots = hotspots;
@@ -85,7 +99,9 @@ class _MapScreenState extends State<MapScreen> {
       // 표시되던 낙관적 업데이트 마커(_dustSpots)는 이제 역할이 끝났습니다.
       // 지우지 않으면 실제 데이터가 이미 있어도 계속 "동기화 중"만 뜹니다.
       MapScreen._dustSpots.clear();
+      print('[MapScreen] ✅ _loadHotspots 완료 (마커 ${hotspots.length}개)');
     } catch (e) {
+      print('[MapScreen] ❌ _loadHotspots 실패: $e');
       if (!mounted) return;
       setState(() {
         _errorMessage = e.toString().replaceFirst('Exception: ', '');
@@ -101,19 +117,25 @@ class _MapScreenState extends State<MapScreen> {
     required bool moveCamera,
     bool silent = false,
   }) async {
+    print(
+      '[MapScreen] 🔵 _getMyLocation 시작 (moveCamera=$moveCamera, silent=$silent)',
+    );
     if (moveCamera && !silent) {
       setState(() => _isLocating = true);
     }
 
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      print('[MapScreen] → 위치 서비스 활성화 여부: $serviceEnabled');
       if (!serviceEnabled) {
         throw Exception('위치 서비스가 꺼져 있습니다. 기기 설정에서 켜주세요');
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
+      print('[MapScreen] → 현재 권한 상태: $permission');
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
+        print('[MapScreen] → 권한 재요청 결과: $permission');
         if (permission == LocationPermission.denied) {
           throw Exception('위치 권한이 거부되었습니다');
         }
@@ -128,6 +150,7 @@ class _MapScreenState extends State<MapScreen> {
         const Duration(seconds: 2),
         onTimeout: () => null,
       );
+      print('[MapScreen] → getLastKnownPosition 결과: $lastKnown');
       if (lastKnown != null) {
         if (!mounted) return;
         final quickLatLng = LatLng(lastKnown.latitude, lastKnown.longitude);
@@ -139,6 +162,7 @@ class _MapScreenState extends State<MapScreen> {
 
       // 실제 최신 위치로 정확히 갱신
       // 타임아웃 없으면 GPS 신호가 안 잡힐 때 스피너가 무한정 돌 수 있음
+      print('[MapScreen] → getCurrentPosition 요청 중... (최대 10초 대기)');
       final position =
           await Geolocator.getCurrentPosition(
             locationSettings: const LocationSettings(
@@ -149,6 +173,9 @@ class _MapScreenState extends State<MapScreen> {
             onTimeout: () =>
                 throw Exception('위치 확인 시간이 초과되었습니다. GPS 신호를 확인해주세요'),
           );
+      print(
+        '[MapScreen] → getCurrentPosition 결과: lat=${position.latitude}, lng=${position.longitude}',
+      );
       final myLatLng = LatLng(position.latitude, position.longitude);
 
       if (!mounted) return;
@@ -157,7 +184,9 @@ class _MapScreenState extends State<MapScreen> {
       if (moveCamera) {
         _mapController.move(myLatLng, 15);
       }
+      print('[MapScreen] ✅ _getMyLocation 성공');
     } catch (e) {
+      print('[MapScreen] ❌ _getMyLocation 실패: $e');
       if (!silent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -209,18 +238,9 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                   // 먼지 마커들 - 실제 서버 데이터 기반
-                  ..._hotspots.map((hotspot) {
-                    final GeoPoint location = hotspot['location'] as GeoPoint;
-                    return Marker(
-                      point: LatLng(location.latitude, location.longitude),
-                      width: 60,
-                      height: 60,
-                      child: GestureDetector(
-                        onTap: () => _showHotspotSheet(context, hotspot),
-                        child: Image.asset('assets/images/marker_dust.png'),
-                      ),
-                    );
-                  }),
+                  // (잘못된 데이터가 섞여 있어도 전체 마커가 다 사라지지 않도록
+                  //  안전하게 하나씩 걸러서 만듭니다 — _buildHotspotMarkers 참고)
+                  ..._buildHotspotMarkers(),
                   // 방금 신고해서 아직 서버 재조회 전인 "낙관적 업데이트" 마커
                   // (실데이터가 없어 상세 시트 대신 안내만 표시)
                   ...MapScreen._dustSpots.map(
@@ -334,6 +354,46 @@ class _MapScreenState extends State<MapScreen> {
         ],
       ),
     );
+  }
+
+  // ==========================================
+  // hotspot 목록 → 마커 리스트 변환 (안전하게, 하나씩)
+  // ==========================================
+  // 리스트 리터럴 안에서 .map()으로 한 번에 만들면, location 데이터가
+  // 잘못된 문서 단 하나 때문에 "마커 전체(파란 내 위치 점 포함)"가
+  // 통째로 안 그려지는 문제가 있었습니다 (Dart는 리스트 리터럴을
+  // 한 번에 계산하기 때문에, 하나가 실패하면 전부 실패).
+  // 그래서 for문 + try/catch로 하나씩 만들고, 문제 있는 것만 건너뜁니다.
+  List<Marker> _buildHotspotMarkers() {
+    final markers = <Marker>[];
+
+    for (final hotspot in _hotspots) {
+      try {
+        final location = hotspot['location'];
+        if (location is! GeoPoint) {
+          print(
+            '[MapScreen] ⚠️ 잘못된 location 데이터, 마커 건너뜀: id=${hotspot['id']}, location=$location',
+          );
+          continue;
+        }
+
+        markers.add(
+          Marker(
+            point: LatLng(location.latitude, location.longitude),
+            width: 60,
+            height: 60,
+            child: GestureDetector(
+              onTap: () => _showHotspotSheet(context, hotspot),
+              child: Image.asset('assets/images/marker_dust.png'),
+            ),
+          ),
+        );
+      } catch (e) {
+        print('[MapScreen] ⚠️ 마커 생성 실패, 건너뜀: id=${hotspot['id']}, error=$e');
+      }
+    }
+
+    return markers;
   }
 
   // ==========================================
@@ -491,6 +551,23 @@ class _HotspotPartySheetState extends State<_HotspotPartySheet> {
     setState(() => _isReserving = true);
 
     try {
+      // 이미 진행 중인(예약된) hotspot이 있는지 먼저 확인
+      // → 있으면 새로 예약 시도하지 않고, 그 화면으로 바로 이동시킴
+      final existingReservation = await widget.hotspotService
+          .getMyReservedHotspot();
+
+      if (existingReservation != null) {
+        if (!mounted) return;
+        Navigator.of(context).pop(); // 시트 닫기
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) =>
+                PloggingScreen(reservedHotspot: existingReservation),
+          ),
+        );
+        return;
+      }
+
       final hotspotId = widget.hotspot['id'] as String;
 
       // 이 hotspot을 내 이름으로 예약 (Transaction으로 동시 예약 방지)
