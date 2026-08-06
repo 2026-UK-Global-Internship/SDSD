@@ -116,6 +116,57 @@ class FloggingService {
   }
 
   // ==========================================
+  // 2-1. 이번 주 활동 통계 (홈 화면 카드용)
+  // ==========================================
+  // Security Rules상 본인 기록만 읽을 수 있으므로, 이 통계는
+  // "나만의" 이번 주 활동 요약입니다 (다른 사용자와 비교 불가).
+  //
+  // - days: 이번 주(월요일 시작) 중 최소 1번이라도 조깅한 날짜 수
+  // - cleans: 이번 주 조깅 중 hotspot 청소까지 연결된(cleanup != null) 횟수
+  Future<Map<String, int>> getWeeklyStats() async {
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('로그인이 필요합니다');
+      }
+
+      // 이번 주 월요일 00:00 계산
+      final now = DateTime.now();
+      final startOfWeek = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(Duration(days: now.weekday - 1));
+
+      final snapshot = await _firestore
+          .collection('flogging')
+          .where('userId', isEqualTo: currentUser.uid)
+          .where(
+            'startedAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startOfWeek),
+          )
+          .get();
+
+      final activeDays = <String>{}; // 'yyyy-M-d' 형태로 중복 없이 날짜만 모음
+      int cleanCount = 0;
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final startedAt = (data['startedAt'] as Timestamp).toDate();
+        activeDays.add('${startedAt.year}-${startedAt.month}-${startedAt.day}');
+
+        if (data['cleanup'] != null) {
+          cleanCount++;
+        }
+      }
+
+      return {'days': activeDays.length, 'cleans': cleanCount};
+    } catch (e) {
+      throw Exception('이번 주 통계 조회 실패: $e');
+    }
+  }
+
+  // ==========================================
   // 3. 특정 조깅 기록 상세 조회
   // ==========================================
   Future<Map<String, dynamic>> getFloggingById(String floggingId) async {

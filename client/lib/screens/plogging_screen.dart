@@ -1,10 +1,18 @@
+//plogging_screen.dart
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:sdsd/server/services/flogging_service.dart';
+import 'package:sdsd/server/services/hotspots_service.dart';
 
 class PloggingScreen extends StatefulWidget {
-  const PloggingScreen({super.key});
+  const PloggingScreen({super.key, this.reservedHotspot});
+
+  // 이 조깅이 특정 hotspot 청소를 위한 것이라면 그 hotspot 데이터가 담깁니다.
+  // (map_screen.dart에서 예약 성공 후 넘겨줌). 그냥 자유 조깅이면 null입니다.
+  final Map<String, dynamic>? reservedHotspot;
 
   @override
   State<PloggingScreen> createState() => _PloggingScreenState();
@@ -41,6 +49,25 @@ class _PloggingScreenState extends State<PloggingScreen> {
 
   // 촬영한 사진 경로
   String? _capturedImagePath;
+
+  // ==========================================
+  // 백엔드 연결용 상태
+  // ==========================================
+  final FloggingService _floggingService = FloggingService();
+  final HotspotService _hotspotService = HotspotService();
+
+  DateTime? _startedAt; // 조깅을 처음 시작한 시각 (일시정지 후 재시작해도 안 바뀜)
+  double? _startLatitude;
+  double? _startLongitude;
+
+  bool _isSaving = false; // "Use this photo" 이후 저장 처리 중 여부
+
+  // 저장 성공 후 결과값 (지금 화면엔 표시 자리가 없지만, 나중에 필요하면
+  // 이 값들로 XP/레벨업 안내를 추가할 수 있도록 남겨둡니다)
+  int? _xpGained;
+  bool _leveledUp = false;
+  DateTime? _completedAt;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -174,6 +201,27 @@ class _PloggingScreenState extends State<PloggingScreen> {
     }
   }
 
+  // ==========================================
+  // 조깅 시작 시점의 위치를 한 번 시도해서 기록 (최선을 다해봄, 실패해도 조깅은 계속됨)
+  // ==========================================
+  Future<void> _captureStartLocation() async {
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _startLatitude = position.latitude;
+        _startLongitude = position.longitude;
+      });
+    } catch (e) {
+      // 여기서 실패해도 저장 시점(_handleUsePhoto)에서 한 번 더 시도합니다.
+      debugPrint('시작 위치 조회 실패 (저장 시점에 재시도 예정): $e');
+    }
+  }
+
   // 타이머 시작/정지 토글
   void _toggleTimer() {
     setState(() {
@@ -181,6 +229,12 @@ class _PloggingScreenState extends State<PloggingScreen> {
     });
 
     if (_isRunning) {
+      // 조깅을 "처음" 시작한 시각만 기록 (일시정지 후 다시 눌러도 덮어쓰지 않음)
+      _startedAt ??= DateTime.now();
+      if (_startLatitude == null) {
+        _captureStartLocation();
+      }
+
       // 1초마다 카운트 증가
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         setState(() {
@@ -573,6 +627,96 @@ class _PloggingScreenState extends State<PloggingScreen> {
     );
   }
 
+  // ==========================================
+  // "Use this photo" 눌렀을 때: 조깅 기록 저장 + (있다면) hotspot 청소완료 처리
+  // ==========================================
+  Future<void> _handleUsePhoto() async {
+    setState(() => _isSaving = true);
+
+    try {
+      // 시작 위치를 아직 못 가져왔으면 마지막으로 한 번 더 시도
+      if (_startLatitude == null || _startLongitude == null) {
+        final position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+          ),
+        );
+        _startLatitude = position.latitude;
+        _startLongitude = position.longitude;
+      }
+
+      // TODO(sensor): 실제 이동 경로를 계속 기록해서 polyline으로 인코딩해야 합니다.
+      //               지금은 실시간 경로 추적 기능이 없어서, saveFloggingRecord가
+      //               요구하는 "빈 값 금지" 조건만 맞춘 임시값(시작 좌표)을 넣습니다.
+      final routePolyline = '$_startLatitude,$_startLongitude';
+
+      // 1. 조깅 기록 저장 (걸음수 기반 XP 자동 지급까지 포함됨)
+      final result = await _floggingService.saveFloggingRecord(
+        startedAt: _startedAt ?? DateTime.now(),
+        startLatitude: _startLatitude!,
+        startLongitude: _startLongitude!,
+        calorie: _kcal,
+        steps: _steps,
+        routePolyline: routePolyline,
+      );
+
+      // 2. 이 조깅이 hotspot 청소를 위한 거였다면, 청소완료 처리까지 진행
+      final hotspot = widget.reservedHotspot;
+      if (hotspot != null) {
+        final hotspotId = hotspot['id'] as String;
+
+        // 이 조깅 기록에 "어떤 hotspot을 청소했는지" 연결 정보 남기기
+        await _floggingService.recordCleanup(
+          floggingId: result['floggingId'] as String,
+          hotspotId: hotspotId,
+        );
+
+        // hotspot 상태를 reserved → cleaned로 변경 + 쓰다듬기 기회 지급
+        await _hotspotService.completeCleaning(hotspotId);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _xpGained = result['xpGained'] as int?;
+        _leveledUp = result['leveledUp'] as bool? ?? false;
+        _completedAt = DateTime.now();
+        _currentView = 'result';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red[600],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  // "July 29, 2026 · 08:30 AM" 형태로 변환
+  String _formatResultDate(DateTime dt) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    final hour12 = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final period = dt.hour < 12 ? 'AM' : 'PM';
+    final minute = dt.minute.toString().padLeft(2, '0');
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year} · $hour12:$minute $period';
+  }
+
   // 촬영 후 확인 화면 (Use this photo / Or take again)
   Widget _buildCameraConfirmView() {
     return Stack(
@@ -622,13 +766,7 @@ class _PloggingScreenState extends State<PloggingScreen> {
             children: [
               // Use this photo
               GestureDetector(
-                onTap: () {
-                  // TODO(backend): Firebase Storage에 사진 업로드
-                  // 결과 화면으로 전환
-                  setState(() {
-                    _currentView = 'result';
-                  });
-                },
+                onTap: _isSaving ? null : _handleUsePhoto, // ← 변경: 저장 로직 연결
                 child: Container(
                   width: double.infinity,
                   height: 56,
@@ -640,24 +778,37 @@ class _PloggingScreenState extends State<PloggingScreen> {
                       colors: [Color(0xFFFBBF24), Color(0xFFF472B6)],
                     ),
                   ),
-                  child: const Center(
-                    child: Text(
-                      'Use this photo',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 18,
-                        color: Colors.white,
-                      ),
-                    ),
+                  child: Center(
+                    child: _isSaving
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                        : const Text(
+                            'Use this photo',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.w700,
+                              fontSize: 18,
+                              color: Colors.white,
+                            ),
+                          ),
                   ),
                 ),
               ),
               const SizedBox(height: 12),
               GestureDetector(
-                onTap: () {
-                  setState(() => _capturedImagePath = null);
-                },
+                onTap: _isSaving
+                    ? null
+                    : () {
+                        setState(() => _capturedImagePath = null);
+                      },
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -683,6 +834,12 @@ class _PloggingScreenState extends State<PloggingScreen> {
   }
 
   Widget _buildResultView() {
+    // 실제 데이터로 교체된 부분: 날짜, 주소
+    final String dateText = _formatResultDate(_completedAt ?? DateTime.now());
+    final String addressText =
+        widget.reservedHotspot?['locationDescription'] as String? ??
+        'Free plogging';
+
     return Container(
       width: double.infinity,
       height: double.infinity,
@@ -794,10 +951,10 @@ class _PloggingScreenState extends State<PloggingScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 20), // ← 이 줄 추가 (숫자로 조절)
-                              // 날짜
-                              const Text(
-                                'July 29, 2026 · 08:30 AM',
-                                style: TextStyle(
+                              // 날짜 (← 실제 완료 시각으로 교체)
+                              Text(
+                                dateText,
+                                style: const TextStyle(
                                   fontFamily: 'Inter',
                                   fontWeight: FontWeight.w400,
                                   fontSize: 16,
@@ -807,10 +964,11 @@ class _PloggingScreenState extends State<PloggingScreen> {
                                 ),
                               ),
                               const SizedBox(height: 2),
-                              // 주소
-                              const Text(
-                                'Camden High St, London NW1 8NJ, UK',
-                                style: TextStyle(
+                              // 주소 (← hotspot의 locationDescription으로 교체,
+                              //        hotspot 없이 자유 조깅이면 'Free plogging')
+                              Text(
+                                addressText,
+                                style: const TextStyle(
                                   fontFamily: 'Inter',
                                   fontWeight: FontWeight.w400,
                                   fontSize: 16,
@@ -821,6 +979,8 @@ class _PloggingScreenState extends State<PloggingScreen> {
                               ),
                               const SizedBox(height: 40), // 2cm 여백
                               // with @친구들
+                              // TODO(backend): 실제 파티 참여자 목록 기능이 생기면
+                              //                아래 하드코딩된 값을 교체하세요.
                               const Text(
                                 'with @sally1039, @thejames',
                                 style: TextStyle(

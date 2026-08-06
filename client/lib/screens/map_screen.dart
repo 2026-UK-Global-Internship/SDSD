@@ -80,6 +80,11 @@ class _MapScreenState extends State<MapScreen> {
         _hotspots = hotspots;
         _isLoading = false;
       });
+
+      // 실제 서버 데이터를 방금 새로 받아왔으니, 그 전까지 "동기화 중"으로
+      // 표시되던 낙관적 업데이트 마커(_dustSpots)는 이제 역할이 끝났습니다.
+      // 지우지 않으면 실제 데이터가 이미 있어도 계속 "동기화 중"만 뜹니다.
+      MapScreen._dustSpots.clear();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -118,7 +123,11 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       // 캐시된 마지막 위치로 우선 빠르게 표시
-      final lastKnown = await Geolocator.getLastKnownPosition();
+      // (getLastKnownPosition은 보통 즉시 반환되지만, 만약을 대비해 짧은 타임아웃)
+      final lastKnown = await Geolocator.getLastKnownPosition().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => null,
+      );
       if (lastKnown != null) {
         if (!mounted) return;
         final quickLatLng = LatLng(lastKnown.latitude, lastKnown.longitude);
@@ -129,11 +138,17 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       // 실제 최신 위치로 정확히 갱신
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-        ),
-      );
+      // 타임아웃 없으면 GPS 신호가 안 잡힐 때 스피너가 무한정 돌 수 있음
+      final position =
+          await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.medium,
+            ),
+          ).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () =>
+                throw Exception('위치 확인 시간이 초과되었습니다. GPS 신호를 확인해주세요'),
+          );
       final myLatLng = LatLng(position.latitude, position.longitude);
 
       if (!mounted) return;
@@ -485,22 +500,13 @@ class _HotspotPartySheetState extends State<_HotspotPartySheet> {
 
       if (!mounted) return;
 
-      // TODO: 플로깅 시작 화면이 만들어지면 아래 주석을 해제하고 연결하세요.
-      //       hotspot 정보(위치, id 등)를 그 화면에 넘겨서
-      //       "이 hotspot을 청소하러 가는 조깅"이라는 걸 기억하게 해야 합니다.
-      // Navigator.of(context).pushReplacement(
-      //   MaterialPageRoute(
-      //     builder: (_) => FloggingScreen(reservedHotspot: widget.hotspot),
-      //   ),
-      // );
-
-      // 예약 성공 → PloggingScreen으로 이동
+      // 예약 성공 → PloggingScreen으로 이동 (hotspot 정보 함께 전달)
       Navigator.of(context).pop(); // 시트 닫기
-      Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => const PloggingScreen()));
-      // TODO: 나중에 hotspot 정보를 PloggingScreen에 넘기기
-      //       PloggingScreen(reservedHotspot: widget.hotspot)
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PloggingScreen(reservedHotspot: widget.hotspot),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
