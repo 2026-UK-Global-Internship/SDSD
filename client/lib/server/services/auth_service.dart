@@ -197,6 +197,7 @@ class AuthService {
 
       await _firestore.collection('users').doc(uid).update({
         'displayName': newName,
+        'displayNameLower': newName.toLowerCase(), // ← 추가: 검색 인덱스도 같이 갱신
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -309,6 +310,8 @@ class AuthService {
       // 새 사용자 문서 생성
       await _firestore.collection('users').doc(uid).set({
         'displayName': displayName,
+        'displayNameLower': displayName
+            .toLowerCase(), // ← 추가: 친구 검색용 (대소문자 무시 검색)
         'email': email,
         'weeklyGoal': 'beginner',
         'character': {
