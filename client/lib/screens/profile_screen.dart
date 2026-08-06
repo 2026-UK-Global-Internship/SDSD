@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sdsd/server/services/auth_service.dart';
 import 'splash_screen.dart';
+import 'friends_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -131,7 +132,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 iconPath: 'assets/images/icons/ic_friends_menu.png',
                 label: 'Friends',
                 onTap: () {
-                  // TODO: FriendsScreen으로 이동
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const FriendsScreen()),
+                  );
                 },
               ),
               _buildMenuItem(

@@ -36,7 +36,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
     {'name': 'Free', 'handle': '0099lucy', 'character': 'character_pink'},
     {'name': 'Free', 'handle': 'freeman12', 'character': 'character_black'},
   ];
-
+  final Set<String> _requestedHandles = {};
   @override
   void dispose() {
     _searchController.dispose();
@@ -53,7 +53,16 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
 
   // 친구 추가 요청 보내기
   void _sendFriendRequest(Map<String, String> user) {
+    final handle = user['handle']!;
+
+    // 이미 요청 보낸 사람이면 무시
+    if (_requestedHandles.contains(handle)) return;
+
     // TODO(backend): Firestore에 친구 요청 저장
+    setState(() {
+      _requestedHandles.add(handle);
+    });
+
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('${user['name']}에게 친구 요청 보냄')));
@@ -221,24 +230,23 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
     );
   }
 
-  // ============ 검색 결과 리스트 ============
   Widget _buildSearchResults() {
     return ListView.builder(
       itemCount: _searchResults.length,
       itemBuilder: (context, index) {
         final user = _searchResults[index];
+        final bool isRequested = _requestedHandles.contains(user['handle']);
+
         return _buildUserRow(
           user: user,
           trailing: GestureDetector(
             onTap: () => _sendFriendRequest(user),
-            child: Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFFB923C), width: 1.5),
-              ),
-              child: const Icon(Icons.add, color: Color(0xFFFB923C), size: 20),
+            child: Image.asset(
+              isRequested
+                  ? 'assets/images/icons/ic_friend_requested.png'
+                  : 'assets/images/icons/ic_add_friend.png',
+              width: 36,
+              height: 36,
             ),
           ),
         );

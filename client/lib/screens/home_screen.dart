@@ -6,6 +6,7 @@ import 'package:sdsd/server/services/flogging_service.dart';
 import 'package:sdsd/server/services/hotspots_service.dart';
 import 'profile_screen.dart';
 import 'splash_screen.dart';
+import 'friends_screen.dart';
 import 'add_friends_screen.dart';
 
 import 'camera_screen.dart';
@@ -252,7 +253,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
+                    MaterialPageRoute(builder: (_) => const FriendsScreen()),
                   );
                 },
                 child: Image.asset(
