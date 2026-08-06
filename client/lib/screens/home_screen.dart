@@ -4,7 +4,11 @@ import 'map_screen.dart';
 import 'package:sdsd/server/services/auth_service.dart';
 import 'package:sdsd/server/services/flogging_service.dart';
 import 'package:sdsd/server/services/hotspots_service.dart';
+import 'profile_screen.dart';
 import 'splash_screen.dart';
+import 'friends_screen.dart';
+import 'add_friends_screen.dart';
+
 import 'camera_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -12,7 +16,7 @@ class HomeScreen extends StatefulWidget {
     super.key,
     required this.name,
     this.initialTab = 0,
-    this.showMapToast = false, // ← 추가
+    this.showMapToast = false, // ← 추가R
   });
   final String name;
   final int initialTab; // 처음 열 때 어떤 탭 보여줄지 (0=홈, 1=지도, ...)
@@ -113,27 +117,27 @@ class _HomeScreenState extends State<HomeScreen> {
           showSubmittedToast: widget.showMapToast,
         ); // const 지우고 파라미터 전달
       case 4:
-        return _buildTempLogout();
+        return const ProfileScreen();
       default:
         return _buildHomePage();
     }
   }
 
   // 임시 로그아웃 화면 (나중에 프로필 화면으로 교체)
-  Widget _buildTempLogout() {
-    return Center(
-      child: ElevatedButton(
-        onPressed: () async {
-          await AuthService().signOut();
-          if (!mounted) return;
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const SplashScreen()),
-          );
-        },
-        child: const Text('로그아웃 (임시)'),
-      ),
-    );
-  }
+  // Widget _buildTempLogout() {
+  //   return Center(
+  //     child: ElevatedButton(
+  //       onPressed: () async {
+  //         await AuthService().signOut();
+  //         if (!mounted) return;
+  //         Navigator.of(context).pushReplacement(
+  //           MaterialPageRoute(builder: (_) => const SplashScreen()),
+  //         );
+  //       },
+  //       child: const Text('로그아웃 (임시)'),
+  //     ),
+  //   );
+  // }
 
   // ---------- 홈 탭 콘텐츠 ----------
   Widget _buildHomePage() {
@@ -247,7 +251,10 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
               child: GestureDetector(
                 onTap: () {
-                  // TODO: 친구 추가 화면으로 이동
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const FriendsScreen()),
+                  );
                 },
                 child: Image.asset(
                   'assets/images/btn_add_friends.png',
@@ -344,7 +351,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               children: [
                 _buildStat(daysText, 'days'), // ← 실제 이번 주 활동일수
-                const SizedBox(width: 120),
+                const Spacer(),
                 _buildStat(cleansText, 'cleans'), // ← 실제 이번 주 청소 횟수
               ],
             ),
