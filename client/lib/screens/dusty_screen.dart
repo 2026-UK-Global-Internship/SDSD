@@ -58,7 +58,7 @@ class _DustyScreenState extends State<DustyScreen> {
             right: 0,
             bottom: 0,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+              padding: const EdgeInsets.fromLTRB(20, 60, 20, 60),
               // 아래쪽 100은 바텀 네비 공간
               decoration: const BoxDecoration(
                 color: Colors.white,
