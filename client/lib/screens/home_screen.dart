@@ -4,8 +4,10 @@ import 'map_screen.dart';
 import 'package:sdsd/server/services/auth_service.dart';
 import 'package:sdsd/server/services/flogging_service.dart';
 import 'package:sdsd/server/services/hotspots_service.dart';
+import 'profile_screen.dart';
 import 'splash_screen.dart';
 import 'add_friends_screen.dart';
+
 import 'camera_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -114,27 +116,27 @@ class _HomeScreenState extends State<HomeScreen> {
           showSubmittedToast: widget.showMapToast,
         ); // const 지우고 파라미터 전달
       case 4:
-        return _buildTempLogout();
+        return const ProfileScreen();
       default:
         return _buildHomePage();
     }
   }
 
   // 임시 로그아웃 화면 (나중에 프로필 화면으로 교체)
-  Widget _buildTempLogout() {
-    return Center(
-      child: ElevatedButton(
-        onPressed: () async {
-          await AuthService().signOut();
-          if (!mounted) return;
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const SplashScreen()),
-          );
-        },
-        child: const Text('로그아웃 (임시)'),
-      ),
-    );
-  }
+  // Widget _buildTempLogout() {
+  //   return Center(
+  //     child: ElevatedButton(
+  //       onPressed: () async {
+  //         await AuthService().signOut();
+  //         if (!mounted) return;
+  //         Navigator.of(context).pushReplacement(
+  //           MaterialPageRoute(builder: (_) => const SplashScreen()),
+  //         );
+  //       },
+  //       child: const Text('로그아웃 (임시)'),
+  //     ),
+  //   );
+  // }
 
   // ---------- 홈 탭 콘텐츠 ----------
   Widget _buildHomePage() {
@@ -348,7 +350,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               children: [
                 _buildStat(daysText, 'days'), // ← 실제 이번 주 활동일수
-                const SizedBox(width: 120),
+                const Spacer(),
                 _buildStat(cleansText, 'cleans'), // ← 실제 이번 주 청소 횟수
               ],
             ),
