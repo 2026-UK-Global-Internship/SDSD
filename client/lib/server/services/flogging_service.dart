@@ -29,6 +29,7 @@ class FloggingService {
     required int calorie,
     required int steps,
     required String routePolyline,
+    List<Map<String, dynamic>>? partyMembers, // ← 추가: 함께한 친구들
   }) async {
     try {
       final currentUser = _auth.currentUser;
@@ -53,6 +54,15 @@ class FloggingService {
         throw Exception('올바른 경도 값이 아닙니다 (-180 ~ 180)');
       }
 
+      // partyMembers는 화면 표시용(이름/색상 등) 전체 정보,
+      // partyMemberUids는 "이 uid가 이 기록에 포함되어 있는가?"를
+      // Firestore에서 검색(arrayContains)하기 위한 별도 배열입니다.
+      // → Firestore는 배열 안 객체의 특정 필드만으로는 검색할 수 없어서
+      //   uid만 뽑은 단순 배열을 하나 더 만들어야 합니다.
+      final partyMemberUids = (partyMembers ?? [])
+          .map((m) => m['uid'] as String)
+          .toList();
+
       final docRef = await _firestore.collection('flogging').add({
         'userId': currentUser.uid,
         'startingPoint': GeoPoint(startLatitude, startLongitude),
@@ -61,12 +71,19 @@ class FloggingService {
         'routePolyline': routePolyline,
         'startedAt': Timestamp.fromDate(startedAt),
         'cleanup': null, // 청소 안 했으면 null, 나중에 recordCleanup()으로 채움
+        'partyMembers': partyMembers ?? [], // 표시용 (이름, 캐릭터 색 등)
+        'partyMemberUids': partyMemberUids, // 조회용 (arrayContains 검색)
         'createdAt': FieldValue.serverTimestamp(),
       });
 
       print('✓ 조깅 기록 저장 성공: ${docRef.id}');
 
       // ★ 연결: 걸음수 기반으로 XP 지급
+      // 주의: 지금 로그인한 나에게만 XP를 지급합니다.
+      //       파티원들의 character.xp는 Security Rules상 본인만 수정 가능해서,
+      //       이 기기(내 계정)에서 다른 사람 XP를 대신 올려줄 수 없습니다.
+      //       파티원들은 이 기록을 "조회"는 할 수 있지만, XP는 각자
+      //       자기 계정으로 직접 활동해야 쌓입니다.
       final xpToGain = _calculateXpFromSteps(steps);
       Map<String, dynamic>? xpResult;
       if (xpToGain > 0) {
@@ -82,6 +99,39 @@ class FloggingService {
       };
     } catch (e) {
       throw Exception('조깅 기록 저장 실패: $e');
+    }
+  }
+
+  // ==========================================
+  // 1-1. 내가 파티원으로 참여한 조깅 기록 조회 (본인이 만든 기록 제외)
+  // ==========================================
+  // ⚠️ 이 쿼리가 동작하려면 Firestore Security Rules의 flogging 컬렉션
+  //    read 조건에 "request.auth.uid가 partyMemberUids 배열에 있으면 허용"
+  //    조건이 추가되어 있어야 합니다. (본인 소유 기록만 허용하는 기존 규칙 그대로면
+  //    파티원으로만 참여한 기록은 조회 시 permission-denied가 납니다)
+  Future<List<Map<String, dynamic>>> getPartyFloggingHistory({
+    int limit = 20,
+  }) async {
+    try {
+      final currentUser = _auth.currentUser;
+      if (currentUser == null) {
+        throw Exception('로그인이 필요합니다');
+      }
+
+      final snapshot = await _firestore
+          .collection('flogging')
+          .where('partyMemberUids', arrayContains: currentUser.uid)
+          .orderBy('startedAt', descending: true)
+          .limit(limit)
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+    } catch (e) {
+      throw Exception('파티 조깅 기록 조회 실패: $e');
     }
   }
 

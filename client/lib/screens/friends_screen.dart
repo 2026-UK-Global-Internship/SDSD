@@ -1,4 +1,5 @@
 //friends_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'add_friends_screen.dart';
 import 'package:sdsd/server/services/friendship_service.dart';
@@ -24,32 +25,80 @@ class _FriendsScreenState extends State<FriendsScreen> {
   // 현재 페이지 (그리드 페이지네이션용)
   int _currentGridPage = 0;
 
+  // ==========================================
+  // 실시간 구독 관리용 상태
+  // ==========================================
+  // 3개 스트림을 각각 구독하다가, Firestore에서 뭐라도 바뀌면
+  // 그때마다 최신 원본 데이터를 합쳐서 화면을 다시 그립니다.
+  StreamSubscription<List<Map<String, dynamic>>>? _incomingSub;
+  StreamSubscription<List<Map<String, dynamic>>>? _friendsAsUser1Sub;
+  StreamSubscription<List<Map<String, dynamic>>>? _friendsAsUser2Sub;
+
+  List<Map<String, dynamic>> _rawIncoming = [];
+  List<Map<String, dynamic>> _rawFriendsAsUser1 = [];
+  List<Map<String, dynamic>> _rawFriendsAsUser2 = [];
+
   @override
   void initState() {
     super.initState();
-    _loadFriendsData();
+    _subscribeToLiveUpdates();
+  }
+
+  @override
+  void dispose() {
+    _incomingSub?.cancel();
+    _friendsAsUser1Sub?.cancel();
+    _friendsAsUser2Sub?.cancel();
+    super.dispose();
   }
 
   // ==========================================
-  // 친구 목록 + 받은 요청 목록 불러오기
+  // 실시간 구독 시작
   // ==========================================
-  Future<void> _loadFriendsData() async {
+  void _subscribeToLiveUpdates() {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
+    _incomingSub = _friendshipService.watchIncomingRequests().listen((data) {
+      _rawIncoming = data;
+      _onRawDataChanged();
+    }, onError: (e) => _handleStreamError(e));
+
+    _friendsAsUser1Sub = _friendshipService.watchFriendsAsUser1().listen((
+      data,
+    ) {
+      _rawFriendsAsUser1 = data;
+      _onRawDataChanged();
+    }, onError: (e) => _handleStreamError(e));
+
+    _friendsAsUser2Sub = _friendshipService.watchFriendsAsUser2().listen((
+      data,
+    ) {
+      _rawFriendsAsUser2 = data;
+      _onRawDataChanged();
+    }, onError: (e) => _handleStreamError(e));
+  }
+
+  void _handleStreamError(Object e) {
+    if (!mounted) return;
+    setState(() {
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _isLoading = false;
+    });
+  }
+
+  // ==========================================
+  // 세 스트림 중 하나라도 새 데이터가 오면 호출됨
+  // ==========================================
+  // 원본(uid만 있는) 데이터를 합치고, 각자의 프로필(이름/캐릭터색)을
+  // 조회해서 화면에 뿌릴 최종 데이터를 만듭니다.
+  Future<void> _onRawDataChanged() async {
+    final friendships = [..._rawFriendsAsUser1, ..._rawFriendsAsUser2];
+    final requests = _rawIncoming;
+
     try {
-      final results = await Future.wait([
-        _friendshipService.getMyFriends(),
-        _friendshipService.getIncomingRequests(),
-      ]);
-
-      final friendships = results[0];
-      final requests = results[1];
-
-      // 친구/요청 문서엔 상대방 uid만 있어서, displayName/캐릭터색을
-      // 각각 프로필 조회로 채워야 화면에 보여줄 수 있습니다.
       final friendsWithProfile = await Future.wait(
         friendships.map((f) async {
           try {
@@ -97,6 +146,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         _friends = friendsWithProfile;
         _friendRequests = requestsWithProfile;
         _isLoading = false;
+        _errorMessage = null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -159,8 +209,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     context,
                     MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
                   );
-                  // Add Friends에서 요청을 보내고 돌아왔을 수 있으니 새로고침
-                  _loadFriendsData();
+                  // 친구 요청은 실시간 스트림으로 자동 반영되므로
+                  // 여기서 수동으로 새로고침할 필요가 없습니다.
                 },
                 child: Container(
                   height: 44,
@@ -207,13 +257,25 @@ class _FriendsScreenState extends State<FriendsScreen> {
           children: [
             Text(_errorMessage!, style: TextStyle(color: Colors.red[700])),
             const SizedBox(height: 12),
-            TextButton(onPressed: _loadFriendsData, child: const Text('재시도')),
+            TextButton(
+              onPressed: () {
+                _incomingSub?.cancel();
+                _friendsAsUser1Sub?.cancel();
+                _friendsAsUser2Sub?.cancel();
+                _subscribeToLiveUpdates();
+              },
+              child: const Text('재시도'),
+            ),
           ],
         ),
       );
     }
 
-    return _friends.isNotEmpty ? _buildFriendsList() : _buildEmptyState();
+    // 친구가 0명이어도 "받은 요청"이 있으면 목록 화면을 보여줘야 함
+    // (요청 섹션이 _buildFriendsList() 안에만 있어서, 이 조건이 없으면
+    //  친구가 없을 때 요청이 와 있어도 안 보이는 문제가 있었음)
+    final hasContent = _friends.isNotEmpty || _friendRequests.isNotEmpty;
+    return hasContent ? _buildFriendsList() : _buildEmptyState();
   }
 
   // ==================== 친구 없음 상태 ====================
@@ -246,12 +308,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ),
           const SizedBox(height: 24),
           GestureDetector(
-            onTap: () async {
-              await Navigator.push(
+            onTap: () {
+              Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
               );
-              _loadFriendsData();
+              // 친구 요청은 실시간 스트림으로 자동 반영됨
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -531,12 +593,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   // Accept 처리
+  // (화면에서 직접 리스트를 지우지 않습니다 — 스트림이 Firestore 변경을
+  //  감지해서 자동으로 목록을 다시 그려줍니다. 여기선 서비스 호출과
+  //  성공/실패 안내만 담당합니다)
   Future<void> _acceptFriendRequest(int index) async {
     final request = _friendRequests[index];
     final friendshipId = request['id'] as String;
-
-    // 낙관적으로 먼저 화면에서 제거 (반응성 위해), 실패하면 되돌림
-    setState(() => _friendRequests.removeAt(index));
 
     try {
       await _friendshipService.acceptFriendRequest(friendshipId);
@@ -544,10 +606,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${request['displayName']}님과 친구가 되었습니다!')),
       );
-      _loadFriendsData(); // 친구 목록에도 반영되도록 새로고침
     } catch (e) {
       if (!mounted) return;
-      setState(() => _friendRequests.insert(index, request)); // 실패 시 복원
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceFirst('Exception: ', '')),
@@ -562,13 +622,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
     final request = _friendRequests[index];
     final friendshipId = request['id'] as String;
 
-    setState(() => _friendRequests.removeAt(index));
-
     try {
       await _friendshipService.deleteFriendship(friendshipId);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _friendRequests.insert(index, request));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceFirst('Exception: ', '')),

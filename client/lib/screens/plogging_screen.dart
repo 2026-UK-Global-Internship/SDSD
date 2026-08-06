@@ -8,11 +8,15 @@ import 'package:sdsd/server/services/flogging_service.dart';
 import 'package:sdsd/server/services/hotspots_service.dart';
 
 class PloggingScreen extends StatefulWidget {
-  const PloggingScreen({super.key, this.reservedHotspot});
+  const PloggingScreen({super.key, this.reservedHotspot, this.partyMembers});
 
   // 이 조깅이 특정 hotspot 청소를 위한 것이라면 그 hotspot 데이터가 담깁니다.
   // (map_screen.dart에서 예약 성공 후 넘겨줌). 그냥 자유 조깅이면 null입니다.
   final Map<String, dynamic>? reservedHotspot;
+
+  // 함께 플로깅하는 친구들 (uid/displayName/characterColor 담긴 목록).
+  // 선택 안 했으면 빈 리스트 또는 null.
+  final List<Map<String, dynamic>>? partyMembers;
 
   @override
   State<PloggingScreen> createState() => _PloggingScreenState();
@@ -692,6 +696,7 @@ class _PloggingScreenState extends State<PloggingScreen> {
         calorie: _kcal,
         steps: _steps,
         routePolyline: routePolyline,
+        partyMembers: widget.partyMembers, // ← 추가: 함께한 친구들도 같이 저장
       );
 
       // 2. 이 조깅이 hotspot 청소를 위한 거였다면, 청소완료 처리까지 진행

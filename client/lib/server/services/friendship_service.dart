@@ -6,6 +6,8 @@ class FriendshipService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  void _log(String msg) => print('[FriendshipService] $msg');
+
   String get _myUid {
     final uid = _auth.currentUser?.uid;
     if (uid == null) {
@@ -18,6 +20,8 @@ class FriendshipService {
   // 1. 친구 요청 보내기
   // ==========================================
   Future<void> sendFriendRequest(String targetUid) async {
+    final sw = Stopwatch()..start();
+    _log('🔵 sendFriendRequest 시작 (targetUid=$targetUid)');
     try {
       final myUid = _myUid;
 
@@ -26,6 +30,9 @@ class FriendshipService {
       }
 
       final existing = await _findFriendshipDoc(myUid, targetUid);
+      _log(
+        '  → 기존 관계 확인 완료: ${existing?.data()['status'] ?? '없음'} (${sw.elapsedMilliseconds}ms)',
+      );
       if (existing != null) {
         final status = existing.data()!['status'];
         if (status == 'accepted') {
@@ -35,7 +42,7 @@ class FriendshipService {
         }
       }
 
-      await _firestore.collection('friendships').add({
+      final docRef = await _firestore.collection('friendships').add({
         'user1Id': myUid,
         'user2Id': targetUid,
         'status': 'pending',
@@ -43,8 +50,11 @@ class FriendshipService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      print('✓ 친구 요청 전송 성공: $myUid → $targetUid');
+      _log(
+        '✅ sendFriendRequest 성공: ${docRef.id} ($myUid → $targetUid) (총 ${sw.elapsedMilliseconds}ms)',
+      );
     } catch (e) {
+      _log('❌ sendFriendRequest 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('친구 요청 실패: $e');
     }
   }
@@ -79,6 +89,8 @@ class FriendshipService {
   // 2. 친구 요청 수락
   // ==========================================
   Future<void> acceptFriendRequest(String friendshipId) async {
+    final sw = Stopwatch()..start();
+    _log('🔵 acceptFriendRequest 시작 (id=$friendshipId)');
     try {
       final myUid = _myUid;
 
@@ -86,6 +98,7 @@ class FriendshipService {
           .collection('friendships')
           .doc(friendshipId)
           .get();
+      _log('  → 문서 조회 완료: exists=${doc.exists} (${sw.elapsedMilliseconds}ms)');
       if (!doc.exists) {
         throw Exception('존재하지 않는 요청입니다');
       }
@@ -103,16 +116,21 @@ class FriendshipService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      print('✓ 친구 요청 수락: $friendshipId');
+      _log(
+        '✅ acceptFriendRequest 성공: $friendshipId (총 ${sw.elapsedMilliseconds}ms)',
+      );
     } catch (e) {
+      _log('❌ acceptFriendRequest 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('친구 요청 수락 실패: $e');
     }
   }
 
   // ==========================================
-  // 3. 친구 관계 삭제 (거절 / 요청 취소 / 친구 끊기)
+  // 3. 친구 관계 삭제
   // ==========================================
   Future<void> deleteFriendship(String friendshipId) async {
+    final sw = Stopwatch()..start();
+    _log('🔵 deleteFriendship 시작 (id=$friendshipId)');
     try {
       final myUid = _myUid;
 
@@ -130,30 +148,103 @@ class FriendshipService {
       }
 
       await _firestore.collection('friendships').doc(friendshipId).delete();
-      print('✓ 친구 관계 삭제: $friendshipId');
+      _log(
+        '✅ deleteFriendship 성공: $friendshipId (총 ${sw.elapsedMilliseconds}ms)',
+      );
     } catch (e) {
+      _log('❌ deleteFriendship 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('친구 관계 삭제 실패: $e');
     }
+  }
+
+  // ==========================================
+  // 4-1. 실시간 감지용 스트림 (화면이 자동으로 새로고침되도록)
+  // ==========================================
+  // .get()은 "그 순간 한 번만" 조회하지만, .snapshots()는 Firestore가
+  // 변경될 때마다 계속 새 데이터를 흘려보내줍니다. 화면에서 이 스트림을
+  // 구독해두면, 다른 기기에서 요청을 보내거나 내가 수락/거절해도
+  // 화면을 나갔다 올 필요 없이 즉시 반영됩니다.
+  //
+  // 3개로 나눈 이유: Firestore는 "user1Id==나 OR user2Id==나" 같은
+  // OR 조건을 한 쿼리로 못 만들어서, 방향별로 따로 감시해야 합니다.
+  Stream<List<Map<String, dynamic>>> watchIncomingRequests() {
+    final myUid = _myUid;
+    return _firestore
+        .collection('friendships')
+        .where('user2Id', isEqualTo: myUid)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            data['fromUid'] = data['user1Id'];
+            return data;
+          }).toList(),
+        );
+  }
+
+  Stream<List<Map<String, dynamic>>> watchFriendsAsUser1() {
+    final myUid = _myUid;
+    return _firestore
+        .collection('friendships')
+        .where('user1Id', isEqualTo: myUid)
+        .where('status', isEqualTo: 'accepted')
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            data['friendUid'] = data['user2Id'];
+            return data;
+          }).toList(),
+        );
+  }
+
+  Stream<List<Map<String, dynamic>>> watchFriendsAsUser2() {
+    final myUid = _myUid;
+    return _firestore
+        .collection('friendships')
+        .where('user2Id', isEqualTo: myUid)
+        .where('status', isEqualTo: 'accepted')
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            data['friendUid'] = data['user1Id'];
+            return data;
+          }).toList(),
+        );
   }
 
   // ==========================================
   // 4. 내 친구 목록 (accepted 상태만)
   // ==========================================
   Future<List<Map<String, dynamic>>> getMyFriends() async {
+    final sw = Stopwatch()..start();
+    _log('🔵 getMyFriends 시작');
     try {
       final myUid = _myUid;
+      _log('  → myUid=$myUid');
 
       final asUser1 = await _firestore
           .collection('friendships')
           .where('user1Id', isEqualTo: myUid)
           .where('status', isEqualTo: 'accepted')
           .get();
+      _log(
+        '  → user1Id 기준 조회: ${asUser1.docs.length}건 (${sw.elapsedMilliseconds}ms)',
+      );
 
       final asUser2 = await _firestore
           .collection('friendships')
           .where('user2Id', isEqualTo: myUid)
           .where('status', isEqualTo: 'accepted')
           .get();
+      _log(
+        '  → user2Id 기준 조회: ${asUser2.docs.length}건 (${sw.elapsedMilliseconds}ms)',
+      );
 
       final results = <Map<String, dynamic>>[];
 
@@ -171,8 +262,12 @@ class FriendshipService {
         results.add(data);
       }
 
+      _log(
+        '✅ getMyFriends 성공: 총 ${results.length}명 (총 ${sw.elapsedMilliseconds}ms)',
+      );
       return results;
     } catch (e) {
+      _log('❌ getMyFriends 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('친구 목록 조회 실패: $e');
     }
   }
@@ -181,22 +276,35 @@ class FriendshipService {
   // 5. 나에게 온 대기중인 요청 목록
   // ==========================================
   Future<List<Map<String, dynamic>>> getIncomingRequests() async {
+    final sw = Stopwatch()..start();
+    _log('🔵 getIncomingRequests 시작');
     try {
       final myUid = _myUid;
+      _log('  → myUid=$myUid');
 
       final snapshot = await _firestore
           .collection('friendships')
           .where('user2Id', isEqualTo: myUid)
           .where('status', isEqualTo: 'pending')
           .get();
+      _log('  → 쿼리 완료: ${snapshot.docs.length}건 (${sw.elapsedMilliseconds}ms)');
+      for (final doc in snapshot.docs) {
+        _log('    - id=${doc.id}, data=${doc.data()}');
+      }
 
-      return snapshot.docs.map((doc) {
+      final result = snapshot.docs.map((doc) {
         final data = doc.data();
         data['id'] = doc.id;
         data['fromUid'] = data['user1Id'];
         return data;
       }).toList();
+
+      _log(
+        '✅ getIncomingRequests 성공: ${result.length}건 (총 ${sw.elapsedMilliseconds}ms)',
+      );
+      return result;
     } catch (e) {
+      _log('❌ getIncomingRequests 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('받은 요청 조회 실패: $e');
     }
   }
@@ -205,6 +313,8 @@ class FriendshipService {
   // 6. 내가 보낸 대기중인 요청 목록
   // ==========================================
   Future<List<Map<String, dynamic>>> getOutgoingRequests() async {
+    final sw = Stopwatch()..start();
+    _log('🔵 getOutgoingRequests 시작');
     try {
       final myUid = _myUid;
 
@@ -213,22 +323,31 @@ class FriendshipService {
           .where('user1Id', isEqualTo: myUid)
           .where('status', isEqualTo: 'pending')
           .get();
+      _log('  → 쿼리 완료: ${snapshot.docs.length}건 (${sw.elapsedMilliseconds}ms)');
 
-      return snapshot.docs.map((doc) {
+      final result = snapshot.docs.map((doc) {
         final data = doc.data();
         data['id'] = doc.id;
         data['toUid'] = data['user2Id'];
         return data;
       }).toList();
+
+      _log(
+        '✅ getOutgoingRequests 성공: ${result.length}건 (총 ${sw.elapsedMilliseconds}ms)',
+      );
+      return result;
     } catch (e) {
+      _log('❌ getOutgoingRequests 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('보낸 요청 조회 실패: $e');
     }
   }
 
   // ==========================================
-  // 7. 특정 사용자와 나의 관계 상태 확인 (버튼 UI용)
+  // 7. 특정 사용자와 나의 관계 상태 확인
   // ==========================================
   Future<Map<String, dynamic>> getFriendshipStatus(String targetUid) async {
+    final sw = Stopwatch()..start();
+    _log('🔵 getFriendshipStatus 시작 (targetUid=$targetUid)');
     try {
       final myUid = _myUid;
 
@@ -238,20 +357,31 @@ class FriendshipService {
 
       final doc = await _findFriendshipDoc(myUid, targetUid);
       if (doc == null) {
+        _log('✅ getFriendshipStatus 성공: none (${sw.elapsedMilliseconds}ms)');
         return {'status': 'none', 'friendshipId': null};
       }
 
       final data = doc.data()!;
       if (data['status'] == 'accepted') {
+        _log(
+          '✅ getFriendshipStatus 성공: accepted (${sw.elapsedMilliseconds}ms)',
+        );
         return {'status': 'accepted', 'friendshipId': doc.id};
       }
 
       if (data['user1Id'] == myUid) {
+        _log(
+          '✅ getFriendshipStatus 성공: pending_outgoing (${sw.elapsedMilliseconds}ms)',
+        );
         return {'status': 'pending_outgoing', 'friendshipId': doc.id};
       } else {
+        _log(
+          '✅ getFriendshipStatus 성공: pending_incoming (${sw.elapsedMilliseconds}ms)',
+        );
         return {'status': 'pending_incoming', 'friendshipId': doc.id};
       }
     } catch (e) {
+      _log('❌ getFriendshipStatus 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('관계 상태 조회 실패: $e');
     }
   }
@@ -259,12 +389,12 @@ class FriendshipService {
   // ==========================================
   // 8. 닉네임으로 사용자 검색
   // ==========================================
-  // 반환 필드에 characterColor 추가: 검색 결과 화면에서 실제 캐릭터
-  // 색상을 아바타에 입히기 위함입니다 (프론트 요청사항).
   Future<List<Map<String, dynamic>>> searchUsersByName(
     String query, {
     int limit = 20,
   }) async {
+    final sw = Stopwatch()..start();
+    _log('🔵 searchUsersByName 시작 (query=$query)');
     try {
       final trimmedQuery = query.trim();
 
@@ -284,6 +414,7 @@ class FriendshipService {
           .where('displayNameLower', isLessThanOrEqualTo: '$lowerQuery\uf8ff')
           .limit(limit)
           .get();
+      _log('  → 쿼리 완료: ${snapshot.docs.length}건 (${sw.elapsedMilliseconds}ms)');
 
       final results = <Map<String, dynamic>>[];
 
@@ -295,29 +426,30 @@ class FriendshipService {
           'uid': doc.id,
           'displayName': data['displayName'],
           'level': data['character']?['level'] ?? 1,
-          'characterColor': data['character']?['color'] ?? '#FF5733', // ← 추가
+          'characterColor': data['character']?['color'] ?? '#FF5733',
         });
       }
 
+      _log(
+        '✅ searchUsersByName 성공: ${results.length}건 (총 ${sw.elapsedMilliseconds}ms)',
+      );
       return results;
     } catch (e) {
+      _log('❌ searchUsersByName 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('사용자 검색 실패: $e');
     }
   }
 
   // ==========================================
-  // 9. 최근 검색 기록 (users/{myUid}/recentSearches 서브컬렉션)
+  // 9. 최근 검색 기록
   // ==========================================
-  // 검색 시점의 이름/색상을 함께 저장해둬서(비정규화), 최근 검색 목록을
-  // 보여줄 때 매번 상대방 프로필을 다시 조회할 필요가 없게 했습니다.
-  // (그 사이 상대가 이름/색을 바꿨다면 최근 검색 목록엔 약간 오래된
-  //  정보가 보일 수 있지만, "최근 검색"의 용도상 문제되지 않습니다)
-
   Future<void> saveRecentSearch({
     required String targetUid,
     required String displayName,
     required String characterColor,
   }) async {
+    final sw = Stopwatch()..start();
+    _log('🔵 saveRecentSearch 시작 (targetUid=$targetUid)');
     try {
       final myUid = _myUid;
 
@@ -325,7 +457,7 @@ class FriendshipService {
           .collection('users')
           .doc(myUid)
           .collection('recentSearches')
-          .doc(targetUid) // 같은 사람 재검색 시 덮어쓰기 (중복 방지 + 최신순 갱신)
+          .doc(targetUid)
           .set({
             'targetUid': targetUid,
             'displayName': displayName,
@@ -333,14 +465,16 @@ class FriendshipService {
             'searchedAt': FieldValue.serverTimestamp(),
           });
 
-      print('✓ 최근 검색 저장: $targetUid');
+      _log('✅ saveRecentSearch 성공: $targetUid (총 ${sw.elapsedMilliseconds}ms)');
     } catch (e) {
-      // 최근 검색 저장 실패는 비치명적 (검색/요청 자체는 이미 성공했으므로)
-      print('⚠️ 최근 검색 저장 실패: $e');
+      // 최근 검색 저장 실패는 비치명적이지만, 진단을 위해 로그는 명확히 남김
+      _log('❌ saveRecentSearch 실패 (비치명적): $e (${sw.elapsedMilliseconds}ms)');
     }
   }
 
   Future<List<Map<String, dynamic>>> getRecentSearches({int limit = 10}) async {
+    final sw = Stopwatch()..start();
+    _log('🔵 getRecentSearches 시작');
     try {
       final myUid = _myUid;
 
@@ -351,18 +485,27 @@ class FriendshipService {
           .orderBy('searchedAt', descending: true)
           .limit(limit)
           .get();
+      _log('  → 쿼리 완료: ${snapshot.docs.length}건 (${sw.elapsedMilliseconds}ms)');
 
-      return snapshot.docs.map((doc) {
+      final result = snapshot.docs.map((doc) {
         final data = doc.data();
         data['id'] = doc.id;
         return data;
       }).toList();
+
+      _log(
+        '✅ getRecentSearches 성공: ${result.length}건 (총 ${sw.elapsedMilliseconds}ms)',
+      );
+      return result;
     } catch (e) {
+      _log('❌ getRecentSearches 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('최근 검색 조회 실패: $e');
     }
   }
 
   Future<void> removeRecentSearch(String targetUid) async {
+    final sw = Stopwatch()..start();
+    _log('🔵 removeRecentSearch 시작 (targetUid=$targetUid)');
     try {
       final myUid = _myUid;
 
@@ -373,8 +516,11 @@ class FriendshipService {
           .doc(targetUid)
           .delete();
 
-      print('✓ 최근 검색 삭제: $targetUid');
+      _log(
+        '✅ removeRecentSearch 성공: $targetUid (총 ${sw.elapsedMilliseconds}ms)',
+      );
     } catch (e) {
+      _log('❌ removeRecentSearch 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('최근 검색 삭제 실패: $e');
     }
   }
