@@ -8,8 +8,6 @@ class AuthService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn();
 
-  void _log(String msg) => print('[AuthService] $msg');
-
   // ==========================================
   // 회원가입 (이메일/비밀번호)
   // ==========================================
@@ -18,37 +16,33 @@ class AuthService {
     required String password,
     required String displayName,
   }) async {
-    final sw = Stopwatch()..start();
-    _log('🔵 signUp 시작 (email=$email)');
     try {
+      // 1. 입력값 검증
       if (email.isEmpty || password.isEmpty || displayName.isEmpty) {
         throw Exception('모든 필드를 입력해주세요');
       }
+
       if (password.length < 8) {
         throw Exception('비밀번호는 8자 이상이어야 합니다');
       }
+
       if (!email.contains('@')) {
         throw Exception('올바른 이메일 주소를 입력해주세요');
       }
+
       if (displayName.length > 50) {
         throw Exception('이름은 50자 이하여야 합니다');
       }
-      _log('  → 입력값 검증 완료 (${sw.elapsedMilliseconds}ms)');
 
+      // 2. Firebase Auth 회원가입
       UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(email: email, password: password);
-      _log('  → Firebase Auth 계정 생성 완료 (${sw.elapsedMilliseconds}ms)');
 
+      // 3. Firestore에 users 문서 생성
       await _createUserDocument(userCredential.user!.uid, displayName, email);
-      _log('  → Firestore 사용자 문서 생성 완료 (${sw.elapsedMilliseconds}ms)');
 
-      _log(
-        '✅ signUp 성공: ${userCredential.user!.uid} (총 ${sw.elapsedMilliseconds}ms)',
-      );
+      print('✓ 회원가입 성공: ${userCredential.user!.uid}');
     } on FirebaseAuthException catch (e) {
-      _log(
-        '❌ signUp 실패 (FirebaseAuthException: ${e.code}, ${sw.elapsedMilliseconds}ms)',
-      );
       if (e.code == 'email-already-in-use') {
         throw Exception('이미 사용 중인 이메일입니다');
       } else if (e.code == 'weak-password') {
@@ -59,7 +53,6 @@ class AuthService {
         throw Exception('회원가입 실패: ${e.message}');
       }
     } catch (e) {
-      _log('❌ signUp 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('오류 발생: $e');
     }
   }
@@ -68,21 +61,15 @@ class AuthService {
   // 로그인 (이메일/비밀번호)
   // ==========================================
   Future<void> signIn({required String email, required String password}) async {
-    final sw = Stopwatch()..start();
-    _log('🔵 signIn 시작 (email=$email)');
     try {
       if (email.isEmpty || password.isEmpty) {
         throw Exception('이메일과 비밀번호를 입력해주세요');
       }
 
       await _auth.signInWithEmailAndPassword(email: email, password: password);
-      _log(
-        '✅ signIn 성공: ${_auth.currentUser!.uid} (${sw.elapsedMilliseconds}ms)',
-      );
+
+      print('✓ 로그인 성공: ${_auth.currentUser!.uid}');
     } on FirebaseAuthException catch (e) {
-      _log(
-        '❌ signIn 실패 (FirebaseAuthException: ${e.code}, ${sw.elapsedMilliseconds}ms)',
-      );
       if (e.code == 'user-not-found') {
         throw Exception('가입되지 않은 이메일입니다');
       } else if (e.code == 'wrong-password') {
@@ -93,7 +80,6 @@ class AuthService {
         throw Exception('로그인 실패: ${e.message}');
       }
     } catch (e) {
-      _log('❌ signIn 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('오류 발생: $e');
     }
   }
@@ -101,21 +87,23 @@ class AuthService {
   // ==========================================
   // Google 로그인 (신규 가입 + 로그인)
   // ==========================================
+  // 반환값: true면 "이번에 처음 가입한 신규 사용자", false면 "기존 사용자 로그인"
+  // ← 변경: void에서 bool로 변경. 화면(UI)에서 신규/기존에 따라
+  //         다른 화면으로 이동시켜야 하므로 이 정보가 필요합니다.
   Future<bool> signInWithGoogle() async {
-    final sw = Stopwatch()..start();
-    _log('🔵 signInWithGoogle 시작');
     try {
+      // 1. Google 로그인
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      _log('  → Google 계정 선택 완료 (${sw.elapsedMilliseconds}ms)');
 
       if (googleUser == null) {
         throw Exception('Google 로그인이 취소되었습니다');
       }
 
+      // 2. Google 인증 정보 가져오기
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
-      _log('  → Google 인증 토큰 획득 완료 (${sw.elapsedMilliseconds}ms)');
 
+      // 3. Firebase 인증
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
@@ -124,30 +112,26 @@ class AuthService {
       UserCredential userCredential = await _auth.signInWithCredential(
         credential,
       );
-      _log('  → Firebase Auth 인증 완료 (${sw.elapsedMilliseconds}ms)');
 
+      // 4. 새 사용자인지 확인
       bool isNewUser = userCredential.additionalUserInfo?.isNewUser ?? false;
-      _log('  → 신규 사용자 여부: $isNewUser (${sw.elapsedMilliseconds}ms)');
 
       if (isNewUser) {
+        // 5. 새 사용자면 Firestore에 문서 생성
         String displayName = googleUser.displayName ?? '사용자';
         String email = googleUser.email;
 
         await _createUserDocument(userCredential.user!.uid, displayName, email);
-        _log('  → Firestore 사용자 문서 생성 완료 (${sw.elapsedMilliseconds}ms)');
+
+        print('✓ Google 회원가입 성공: ${userCredential.user!.uid}');
+      } else {
+        print('✓ Google 로그인 성공: ${userCredential.user!.uid}');
       }
 
-      _log(
-        '✅ signInWithGoogle 성공: ${userCredential.user!.uid} (총 ${sw.elapsedMilliseconds}ms)',
-      );
-      return isNewUser;
+      return isNewUser; // ← 변경: 호출한 쪽(UI)에 결과 전달
     } on FirebaseAuthException catch (e) {
-      _log(
-        '❌ signInWithGoogle 실패 (FirebaseAuthException: ${e.code}, ${sw.elapsedMilliseconds}ms)',
-      );
       throw Exception('Google 인증 실패: ${e.message}');
     } catch (e) {
-      _log('❌ signInWithGoogle 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('Google 로그인 오류: $e');
     }
   }
@@ -156,16 +140,15 @@ class AuthService {
   // 로그아웃
   // ==========================================
   Future<void> signOut() async {
-    final sw = Stopwatch()..start();
-    _log('🔵 signOut 시작');
     try {
+      // Firebase 로그아웃
       await _auth.signOut();
-      _log('  → Firebase 로그아웃 완료 (${sw.elapsedMilliseconds}ms)');
 
+      // Google 로그아웃
       await _googleSignIn.signOut();
-      _log('✅ signOut 성공 (총 ${sw.elapsedMilliseconds}ms)');
+
+      print('✓ 로그아웃 성공');
     } catch (e) {
-      _log('❌ signOut 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('로그아웃 실패: $e');
     }
   }
@@ -183,23 +166,18 @@ class AuthService {
   // 사용자 정보 조회
   // ==========================================
   Future<Map<String, dynamic>> getUserProfile(String uid) async {
-    final sw = Stopwatch()..start();
-    _log('🔵 getUserProfile 시작 (uid=$uid)');
     try {
       DocumentSnapshot doc = await _firestore
           .collection('users')
           .doc(uid)
           .get();
-      _log('  → Firestore 문서 조회 완료 (${sw.elapsedMilliseconds}ms)');
 
       if (!doc.exists) {
         throw Exception('사용자 정보를 찾을 수 없습니다');
       }
 
-      _log('✅ getUserProfile 성공 (총 ${sw.elapsedMilliseconds}ms)');
       return doc.data() as Map<String, dynamic>;
     } catch (e) {
-      _log('❌ getUserProfile 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('사용자 정보 조회 실패: $e');
     }
   }
@@ -208,12 +186,11 @@ class AuthService {
   // displayName 업데이트
   // ==========================================
   Future<void> updateDisplayName(String uid, String newName) async {
-    final sw = Stopwatch()..start();
-    _log('🔵 updateDisplayName 시작 (uid=$uid, newName=$newName)');
     try {
       if (newName.isEmpty) {
         throw Exception('이름을 입력해주세요');
       }
+
       if (newName.length > 50) {
         throw Exception('이름은 50자 이하여야 합니다');
       }
@@ -223,55 +200,51 @@ class AuthService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      _log('✅ updateDisplayName 성공 (${sw.elapsedMilliseconds}ms)');
+      print('✓ 이름 업데이트 완료: $newName');
     } catch (e) {
-      _log('❌ updateDisplayName 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('이름 업데이트 실패: $e');
     }
   }
 
   // ==========================================
-  // 온보딩 완료 처리
+  // 온보딩 완료 처리  ← 추가된 부분 ①
   // ==========================================
+  // GoalScreen에서 weeklyGoal 저장까지 성공한 직후 호출합니다.
+  // 이걸 호출해야만 다음 로그인부터 "온보딩 끝난 사용자"로 인식됩니다.
   Future<void> completeOnboarding(String uid) async {
-    final sw = Stopwatch()..start();
-    _log('🔵 completeOnboarding 시작 (uid=$uid)');
     try {
       await _firestore.collection('users').doc(uid).update({
         'onboardingComplete': true,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      _log('✅ completeOnboarding 성공 (${sw.elapsedMilliseconds}ms)');
+      print('✓ 온보딩 완료 처리: $uid');
     } catch (e) {
-      _log('❌ completeOnboarding 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('온보딩 완료 처리 실패: $e');
     }
   }
 
   // ==========================================
-  // 온보딩 완료 여부 확인
+  // 온보딩 완료 여부 확인  ← 추가된 부분 ②
   // ==========================================
+  // 로그인 성공 직후 이 함수로 확인해서,
+  // false면 온보딩 화면으로, true면 홈 화면으로 보내면 됩니다.
   Future<bool> checkOnboardingComplete(String uid) async {
-    final sw = Stopwatch()..start();
-    _log('🔵 checkOnboardingComplete 시작 (uid=$uid)');
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
-      _log('  → Firestore 문서 조회 완료 (${sw.elapsedMilliseconds}ms)');
 
       if (!doc.exists) {
-        _log('  → 문서 없음, false 반환 (${sw.elapsedMilliseconds}ms)');
+        // 문서가 아예 없다는 건 비정상 상태이므로,
+        // 안전하게 "온보딩 안 끝남"으로 취급합니다.
         return false;
       }
 
       final data = doc.data() as Map<String, dynamic>;
-      final result = data['onboardingComplete'] ?? false;
-      _log(
-        '✅ checkOnboardingComplete 성공: $result (총 ${sw.elapsedMilliseconds}ms)',
-      );
-      return result;
+
+      // 예전에 만들어진 계정(필드 자체가 없는 경우)도 있을 수 있으므로
+      // 기본값을 false로 지정해둡니다 (필드 없으면 온보딩 안 된 것으로 간주).
+      return data['onboardingComplete'] ?? false;
     } catch (e) {
-      _log('❌ checkOnboardingComplete 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('온보딩 상태 확인 실패: $e');
     }
   }
@@ -280,8 +253,6 @@ class AuthService {
   // weeklyGoal 업데이트
   // ==========================================
   Future<void> updateWeeklyGoal(String uid, String goal) async {
-    final sw = Stopwatch()..start();
-    _log('🔵 updateWeeklyGoal 시작 (uid=$uid, goal=$goal)');
     try {
       if (!['beginner', 'regular', 'ecoHero'].contains(goal)) {
         throw Exception('올바른 목표 수준을 선택해주세요');
@@ -292,9 +263,8 @@ class AuthService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      _log('✅ updateWeeklyGoal 성공 (${sw.elapsedMilliseconds}ms)');
+      print('✓ 주간 목표 업데이트: $goal');
     } catch (e) {
-      _log('❌ updateWeeklyGoal 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('주간 목표 업데이트 실패: $e');
     }
   }
@@ -303,8 +273,6 @@ class AuthService {
   // 캐릭터 색상 변경
   // ==========================================
   Future<void> updateCharacterColor(String uid, String color) async {
-    final sw = Stopwatch()..start();
-    _log('🔵 updateCharacterColor 시작 (uid=$uid, color=$color)');
     try {
       if (!color.startsWith('#') || color.length != 7) {
         throw Exception('올바른 HEX 색상을 입력해주세요 (예: #FF5733)');
@@ -315,9 +283,8 @@ class AuthService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      _log('✅ updateCharacterColor 성공 (${sw.elapsedMilliseconds}ms)');
+      print('✓ 캐릭터 색상 변경: $color');
     } catch (e) {
-      _log('❌ updateCharacterColor 실패: $e (${sw.elapsedMilliseconds}ms)');
       throw Exception('색상 변경 실패: $e');
     }
   }
@@ -330,17 +297,16 @@ class AuthService {
     String displayName,
     String email,
   ) async {
-    final sw = Stopwatch()..start();
-    _log('  🔵 _createUserDocument 시작 (uid=$uid)');
     try {
+      // 이미 존재하는지 확인
       final docSnapshot = await _firestore.collection('users').doc(uid).get();
-      _log('    → 기존 문서 확인 완료 (${sw.elapsedMilliseconds}ms)');
 
       if (docSnapshot.exists) {
-        _log('    → 이미 존재, 생성 건너뜀 (${sw.elapsedMilliseconds}ms)');
+        print('✓ 사용자 문서가 이미 존재합니다');
         return;
       }
 
+      // 새 사용자 문서 생성
       await _firestore.collection('users').doc(uid).set({
         'displayName': displayName,
         'email': email,
@@ -352,16 +318,18 @@ class AuthService {
           'raise': {'pet': 0, 'feed': 0},
         },
         'reservedHotspotId': null,
+        // 온보딩(이름 → username → weeklyGoal 설정)을 끝까지 마쳤는지 여부  ← 추가된 부분 ③
+        // 회원가입 직후에는 항상 false이며, GoalScreen에서 목표 저장이
+        // 성공한 시점에만 completeOnboarding()을 통해 true로 바뀝니다.
         'onboardingComplete': false,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      _log('  ✅ _createUserDocument 성공 (${sw.elapsedMilliseconds}ms)');
+      print('✓ 사용자 문서 생성됨: $uid');
     } catch (e) {
-      _log(
-        '  ❌ _createUserDocument 실패 (비치명적, 계속 진행): $e (${sw.elapsedMilliseconds}ms)',
-      );
+      print('⚠️ 사용자 문서 생성 오류: $e');
+      // 사용자는 이미 인증되었으므로, 문서 생성 실패는 비치명적
     }
   }
 }
