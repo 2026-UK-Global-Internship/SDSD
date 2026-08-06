@@ -1,5 +1,8 @@
+//friends_screen.dart
 import 'package:flutter/material.dart';
 import 'add_friends_screen.dart';
+import 'package:sdsd/server/services/friendship_service.dart';
+import 'package:sdsd/server/services/auth_service.dart';
 
 class FriendsScreen extends StatefulWidget {
   const FriendsScreen({super.key});
@@ -9,47 +12,110 @@ class FriendsScreen extends StatefulWidget {
 }
 
 class _FriendsScreenState extends State<FriendsScreen> {
-  // TODO(backend): Firestore에서 유저의 친구 목록 가져와서 판단
-  // 지금은 UI 개발용으로 하드코딩 (true면 친구 있는 화면, false면 없는 화면)
-  final bool _hasFriends = true;
+  final FriendshipService _friendshipService = FriendshipService();
+  final AuthService _authService = AuthService();
 
-  // TODO(backend): Firestore에서 실제 친구 목록 가져오기
-  // 각 친구의 characterColor 필드로 캐릭터 이미지 결정
-  final List<Map<String, String>> _friends = [
-    {'name': 'Zach', 'character': 'character_yellow', 'status': 'online'},
-    {'name': 'Oliver', 'character': 'character_pink', 'status': 'online'},
-    {'name': 'Callum', 'character': 'character_black', 'status': 'online'},
-    {'name': 'Poppy', 'character': 'character_pink', 'status': 'online'},
-    {'name': 'Henry', 'character': 'character_pink', 'status': 'online'},
-    {'name': 'Isla', 'character': 'character_yellow', 'status': 'sleeping'},
-    {'name': 'Freya', 'character': 'character_black', 'status': 'sleeping'},
-    {'name': 'Arthur', 'character': 'character_pink', 'status': 'sleeping'},
-  ];
+  // 실제 데이터로 채워짐 (더 이상 하드코딩 아님)
+  List<Map<String, dynamic>> _friends = [];
+  List<Map<String, dynamic>> _friendRequests = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
   // 현재 페이지 (그리드 페이지네이션용)
   int _currentGridPage = 0;
 
-  // TODO(backend): Firestore에서 실제 친구 요청 목록 가져오기
-  final List<Map<String, String>> _friendRequests = [
-    {
-      'name': 'Elton',
-      'handle': 'eltoncash99',
-      'character': 'character_pink',
-      'daysAgo': '1d',
-    },
-    {
-      'name': 'Kang',
-      'handle': 'dhkang09',
-      'character': 'character_green',
-      'daysAgo': '2d',
-    },
-    {
-      'name': 'Yeonjun',
-      'handle': 'thisisyeonjun',
-      'character': 'character_black',
-      'daysAgo': '7d',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadFriendsData();
+  }
+
+  // ==========================================
+  // 친구 목록 + 받은 요청 목록 불러오기
+  // ==========================================
+  Future<void> _loadFriendsData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final results = await Future.wait([
+        _friendshipService.getMyFriends(),
+        _friendshipService.getIncomingRequests(),
+      ]);
+
+      final friendships = results[0];
+      final requests = results[1];
+
+      // 친구/요청 문서엔 상대방 uid만 있어서, displayName/캐릭터색을
+      // 각각 프로필 조회로 채워야 화면에 보여줄 수 있습니다.
+      final friendsWithProfile = await Future.wait(
+        friendships.map((f) async {
+          try {
+            final profile = await _authService.getUserProfile(
+              f['friendUid'] as String,
+            );
+            return {
+              ...f,
+              'displayName': profile['displayName'] ?? 'Unknown',
+              'characterColor': profile['character']?['color'] ?? '#FF5733',
+            };
+          } catch (_) {
+            return {
+              ...f,
+              'displayName': 'Unknown',
+              'characterColor': '#FF5733',
+            };
+          }
+        }),
+      );
+
+      final requestsWithProfile = await Future.wait(
+        requests.map((r) async {
+          try {
+            final profile = await _authService.getUserProfile(
+              r['fromUid'] as String,
+            );
+            return {
+              ...r,
+              'displayName': profile['displayName'] ?? 'Unknown',
+              'characterColor': profile['character']?['color'] ?? '#FF5733',
+            };
+          } catch (_) {
+            return {
+              ...r,
+              'displayName': 'Unknown',
+              'characterColor': '#FF5733',
+            };
+          }
+        }),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _friends = friendsWithProfile;
+        _friendRequests = requestsWithProfile;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        _isLoading = false;
+      });
+    }
+  }
+
+  // HEX 문자열('#RRGGBB') → Color 변환
+  Color _parseColor(String hex) {
+    try {
+      final cleaned = hex.replaceFirst('#', '');
+      return Color(int.parse('FF$cleaned', radix: 16));
+    } catch (_) {
+      return const Color(0xFFFF5733); // 파싱 실패 시 기본색
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,11 +154,13 @@ class _FriendsScreenState extends State<FriendsScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
+                onTap: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
                   );
+                  // Add Friends에서 요청을 보내고 돌아왔을 수 있으니 새로고침
+                  _loadFriendsData();
                 },
                 child: Container(
                   height: 44,
@@ -120,13 +188,32 @@ class _FriendsScreenState extends State<FriendsScreen> {
             ),
             const SizedBox(height: 16),
             // ============ 메인 콘텐츠 ============
-            Expanded(
-              child: _hasFriends ? _buildFriendsList() : _buildEmptyState(),
-            ),
+            Expanded(child: _buildContent()),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildContent() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_errorMessage!, style: TextStyle(color: Colors.red[700])),
+            const SizedBox(height: 12),
+            TextButton(onPressed: _loadFriendsData, child: const Text('재시도')),
+          ],
+        ),
+      );
+    }
+
+    return _friends.isNotEmpty ? _buildFriendsList() : _buildEmptyState();
   }
 
   // ==================== 친구 없음 상태 ====================
@@ -159,11 +246,12 @@ class _FriendsScreenState extends State<FriendsScreen> {
           ),
           const SizedBox(height: 24),
           GestureDetector(
-            onTap: () {
-              Navigator.push(
+            onTap: () async {
+              await Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AddFriendsScreen()),
               );
+              _loadFriendsData();
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -274,64 +362,27 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
-  // 그리드 아이템 (캐릭터 + 이름 + 상태)
-  Widget _buildFriendGridItem(Map<String, String> friend) {
+  // 그리드 아이템 (캐릭터 + 이름)
+  // 온라인/자고있음 배지는 추적하는 데이터가 없어서 제거했습니다.
+  Widget _buildFriendGridItem(Map<String, dynamic> friend) {
+    final color = _parseColor(friend['characterColor'] as String);
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            Image.asset(
-              'assets/images/icons/${friend['character']}.png',
-              width: 60,
-              height: 60,
-            ),
-            // TODO(backend): Firestore에서 실제 온라인/오프라인 상태 가져오기
-            if (friend['status'] == 'sleeping')
-              Positioned(
-                top: -4,
-                right: 6,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF60A5FA),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'Zzz',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 9,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              )
-            else
-              Positioned(
-                bottom: 2,
-                right: 6,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFF10B981),
-                    border: Border.all(color: Colors.white, width: 1.5),
-                  ),
-                ),
-              ),
-          ],
+        // 실제 character.color를 캐릭터 실루엣에 입혀서 표시
+        // (4개 고정 이미지 중 하나를 "틀"로만 사용하고, srcIn으로 색만 실제 값으로 교체)
+        ColorFiltered(
+          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+          child: Image.asset(
+            'assets/images/icons/character_yellow.png',
+            width: 60,
+            height: 60,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
-          friend['name']!,
+          friend['displayName'] as String,
           style: const TextStyle(
             fontFamily: 'Inter',
             fontWeight: FontWeight.w600,
@@ -343,18 +394,32 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 
-  // 친구 요청 아이템 (프로필 + 이름 + 핸들 + Accept/Deny)
-  Widget _buildFriendRequestItem(Map<String, String> request, int index) {
+  // 게시 시각을 "1d", "2d" 형태로 변환
+  String _daysAgoLabel(dynamic createdAt) {
+    if (createdAt == null) return '';
+    final DateTime created = (createdAt as dynamic).toDate();
+    final days = DateTime.now().difference(created).inDays;
+    if (days < 1) return 'today';
+    return '${days}d';
+  }
+
+  // 친구 요청 아이템 (프로필 + 이름 + Accept/Deny)
+  Widget _buildFriendRequestItem(Map<String, dynamic> request, int index) {
+    final color = _parseColor(request['characterColor'] as String);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Column(
         children: [
           Row(
             children: [
-              Image.asset(
-                'assets/images/icons/${request['character']}.png',
-                width: 44,
-                height: 44,
+              ColorFiltered(
+                colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+                child: Image.asset(
+                  'assets/images/icons/character_yellow.png',
+                  width: 44,
+                  height: 44,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -362,7 +427,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      request['name']!,
+                      request['displayName'] as String,
                       style: const TextStyle(
                         fontFamily: 'Inter',
                         fontWeight: FontWeight.w700,
@@ -370,8 +435,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
                         color: Colors.black,
                       ),
                     ),
+                    // handle 필드가 스키마에 따로 없어서, displayName을 그대로
+                    // @표시에 사용합니다 (username_screen도 같은 필드를 씁니다)
                     Text(
-                      '@${request['handle']}',
+                      '@${request['displayName']}',
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 12,
@@ -382,7 +449,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 ),
               ),
               Text(
-                request['daysAgo']!,
+                _daysAgoLabel(request['createdAt']),
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: 12,
@@ -464,22 +531,50 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   // Accept 처리
-  void _acceptFriendRequest(int index) {
+  Future<void> _acceptFriendRequest(int index) async {
     final request = _friendRequests[index];
-    // TODO(backend): Firestore에 친구 관계 추가 + 요청 삭제
-    setState(() {
-      _friendRequests.removeAt(index);
-    });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('${request['name']}님과 친구가 되었습니다!')));
+    final friendshipId = request['id'] as String;
+
+    // 낙관적으로 먼저 화면에서 제거 (반응성 위해), 실패하면 되돌림
+    setState(() => _friendRequests.removeAt(index));
+
+    try {
+      await _friendshipService.acceptFriendRequest(friendshipId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${request['displayName']}님과 친구가 되었습니다!')),
+      );
+      _loadFriendsData(); // 친구 목록에도 반영되도록 새로고침
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _friendRequests.insert(index, request)); // 실패 시 복원
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red[600],
+        ),
+      );
+    }
   }
 
   // Deny 처리
-  void _denyFriendRequest(int index) {
-    // TODO(backend): Firestore에서 요청 삭제
-    setState(() {
-      _friendRequests.removeAt(index);
-    });
+  Future<void> _denyFriendRequest(int index) async {
+    final request = _friendRequests[index];
+    final friendshipId = request['id'] as String;
+
+    setState(() => _friendRequests.removeAt(index));
+
+    try {
+      await _friendshipService.deleteFriendship(friendshipId);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _friendRequests.insert(index, request));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red[600],
+        ),
+      );
+    }
   }
 }

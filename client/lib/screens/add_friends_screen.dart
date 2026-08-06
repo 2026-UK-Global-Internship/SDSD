@@ -1,4 +1,7 @@
+//add_friends_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:sdsd/server/services/friendship_service.dart';
 
 class AddFriendsScreen extends StatefulWidget {
   const AddFriendsScreen({super.key});
@@ -9,68 +12,157 @@ class AddFriendsScreen extends StatefulWidget {
 
 class _AddFriendsScreenState extends State<AddFriendsScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final FriendshipService _friendshipService = FriendshipService();
+
   String _searchText = '';
+  Timer? _debounce; // 타이핑마다 검색 안 날리게 살짝 지연
 
-  // TODO(backend): Firestore에서 최근 검색 기록 불러오기
-  // users/{uid}/recentSearches 서브컬렉션 등
-  final List<Map<String, String>> _recentSearches = [
-    {'name': 'Elton', 'handle': 'eltoncash99', 'character': 'character_pink'},
-    {
-      'name': 'Lemon',
-      'handle': 'yummylemonade4',
-      'character': 'character_yellow',
-    },
-    {'name': 'Jasmin', 'handle': 'minjasmin0', 'character': 'character_pink'},
-    {'name': 'Ben', 'handle': 'jjjjjjb', 'character': 'character_black'},
-    {'name': 'Sand', 'handle': 's4ndm4n', 'character': 'character_yellow'},
-    {'name': 'Hyun', 'handle': 'hyun00', 'character': 'character_green'},
-  ];
+  List<Map<String, dynamic>> _recentSearches = [];
+  List<Map<String, dynamic>> _searchResults = [];
+  final Set<String> _requestedUids = {}; // 이번 화면 세션에서 요청 보낸 사람들
 
-  // TODO(backend): Firestore users 컬렉션에서 검색어로 검색
-  // handle 또는 displayName으로 startsWith 쿼리
-  final List<Map<String, String>> _searchResults = [
-    {'name': 'Fred', 'handle': 'fred2009', 'character': 'character_pink'},
-    {'name': 'Fred', 'handle': 'ithereal44', 'character': 'character_yellow'},
-    {'name': 'Fred', 'handle': 'jk99mm99', 'character': 'character_pink'},
-    {'name': 'Free', 'handle': 'unreal324', 'character': 'character_yellow'},
-    {'name': 'Free', 'handle': '0099lucy', 'character': 'character_pink'},
-    {'name': 'Free', 'handle': 'freeman12', 'character': 'character_black'},
-  ];
-  final Set<String> _requestedHandles = {};
+  bool _isLoadingRecent = true;
+  bool _isSearching = false;
+  String? _searchError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecentSearches();
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
-  // 최근 검색에서 한 명 제거
-  void _removeRecentSearch(int index) {
-    setState(() {
-      _recentSearches.removeAt(index);
-    });
-    // TODO(backend): Firestore에서도 삭제
+  // ==========================================
+  // 최근 검색 불러오기
+  // ==========================================
+  Future<void> _loadRecentSearches() async {
+    setState(() => _isLoadingRecent = true);
+    try {
+      final results = await _friendshipService.getRecentSearches();
+      if (!mounted) return;
+      setState(() {
+        _recentSearches = results;
+        _isLoadingRecent = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingRecent = false); // 실패해도 화면은 정상 진행
+    }
   }
 
-  // 친구 추가 요청 보내기
-  void _sendFriendRequest(Map<String, String> user) {
-    final handle = user['handle']!;
+  // 최근 검색에서 한 명 제거
+  Future<void> _removeRecentSearch(int index) async {
+    final removed = _recentSearches[index];
+    setState(() => _recentSearches.removeAt(index));
 
-    // 이미 요청 보낸 사람이면 무시
-    if (_requestedHandles.contains(handle)) return;
+    try {
+      await _friendshipService.removeRecentSearch(
+        removed['targetUid'] as String,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _recentSearches.insert(index, removed)); // 실패 시 복원
+    }
+  }
 
-    // TODO(backend): Firestore에 친구 요청 저장
+  // ==========================================
+  // 검색어 입력 처리 (디바운스 적용)
+  // ==========================================
+  void _onSearchChanged(String value) {
+    setState(() => _searchText = value);
+
+    _debounce?.cancel();
+    if (value.trim().length < 2) {
+      setState(() {
+        _searchResults = [];
+        _searchError = null;
+      });
+      return;
+    }
+
+    _debounce = Timer(const Duration(milliseconds: 400), () {
+      _performSearch(value.trim());
+    });
+  }
+
+  Future<void> _performSearch(String query) async {
     setState(() {
-      _requestedHandles.add(handle);
+      _isSearching = true;
+      _searchError = null;
     });
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('${user['name']}에게 친구 요청 보냄')));
+    try {
+      final results = await _friendshipService.searchUsersByName(query);
+      if (!mounted) return;
+      setState(() {
+        _searchResults = results;
+        _isSearching = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _searchError = e.toString().replaceFirst('Exception: ', '');
+        _isSearching = false;
+      });
+    }
+  }
+
+  // ==========================================
+  // 친구 추가 요청 보내기
+  // ==========================================
+  Future<void> _sendFriendRequest(Map<String, dynamic> user) async {
+    final uid = user['uid'] as String;
+
+    if (_requestedUids.contains(uid)) return; // 이미 요청 보낸 사람이면 무시
+
+    setState(() => _requestedUids.add(uid)); // 낙관적 업데이트
+
+    try {
+      await _friendshipService.sendFriendRequest(uid);
+
+      // 요청을 보냈다는 건 이 사람을 검색해서 골랐다는 뜻이므로
+      // 최근 검색에도 함께 저장
+      await _friendshipService.saveRecentSearch(
+        targetUid: uid,
+        displayName: user['displayName'] as String,
+        characterColor: user['characterColor'] as String? ?? '#FF5733',
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${user['displayName']}에게 친구 요청 보냄')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _requestedUids.remove(uid)); // 실패 시 되돌림
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red[600],
+        ),
+      );
+    }
+  }
+
+  // HEX 문자열('#RRGGBB') → Color 변환
+  Color _parseColor(String hex) {
+    try {
+      final cleaned = hex.replaceFirst('#', '');
+      return Color(int.parse('FF$cleaned', radix: 16));
+    } catch (_) {
+      return const Color(0xFFFF5733);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isSearching = _searchText.isNotEmpty;
+    final bool isSearching = _searchText.trim().length >= 2;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -124,11 +216,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
                           Expanded(
                             child: TextField(
                               controller: _searchController,
-                              onChanged: (value) {
-                                setState(() {
-                                  _searchText = value;
-                                });
-                              },
+                              onChanged: _onSearchChanged,
                               decoration: InputDecoration(
                                 hintText: 'Search for a name or @Handle',
                                 hintStyle: TextStyle(
@@ -145,13 +233,14 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
                               ),
                             ),
                           ),
-                          // 검색어 있을 때만 X 버튼
                           if (isSearching)
                             GestureDetector(
                               onTap: () {
                                 setState(() {
                                   _searchController.clear();
                                   _searchText = '';
+                                  _searchResults = [];
+                                  _searchError = null;
                                 });
                               },
                               child: Icon(
@@ -195,6 +284,19 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
 
   // ============ 최근 검색 리스트 ============
   Widget _buildRecentSearches() {
+    if (_isLoadingRecent) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_recentSearches.isEmpty) {
+      return Center(
+        child: Text(
+          '최근 검색 기록이 없습니다',
+          style: TextStyle(fontFamily: 'Inter', color: Colors.grey[500]),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -217,7 +319,8 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
             itemBuilder: (context, index) {
               final user = _recentSearches[index];
               return _buildUserRow(
-                user: user,
+                displayName: user['displayName'] as String,
+                characterColor: user['characterColor'] as String? ?? '#FF5733',
                 trailing: GestureDetector(
                   onTap: () => _removeRecentSearch(index),
                   child: Icon(Icons.close, color: Colors.grey[400], size: 22),
@@ -231,14 +334,35 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
   }
 
   Widget _buildSearchResults() {
+    if (_isSearching) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_searchError != null) {
+      return Center(
+        child: Text(_searchError!, style: TextStyle(color: Colors.red[700])),
+      );
+    }
+
+    if (_searchResults.isEmpty) {
+      return Center(
+        child: Text(
+          '검색 결과가 없습니다',
+          style: TextStyle(fontFamily: 'Inter', color: Colors.grey[500]),
+        ),
+      );
+    }
+
     return ListView.builder(
       itemCount: _searchResults.length,
       itemBuilder: (context, index) {
         final user = _searchResults[index];
-        final bool isRequested = _requestedHandles.contains(user['handle']);
+        final uid = user['uid'] as String;
+        final bool isRequested = _requestedUids.contains(uid);
 
         return _buildUserRow(
-          user: user,
+          displayName: user['displayName'] as String,
+          characterColor: user['characterColor'] as String? ?? '#FF5733',
           trailing: GestureDetector(
             onTap: () => _sendFriendRequest(user),
             child: Image.asset(
@@ -254,30 +378,35 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
     );
   }
 
-  // ============ 유저 한 명 표시 (프로필 + 이름 + 핸들 + trailing) ============
+  // ============ 유저 한 명 표시 (프로필 + 이름 + trailing) ============
   Widget _buildUserRow({
-    required Map<String, String> user,
+    required String displayName,
+    required String characterColor,
     required Widget trailing,
   }) {
+    final color = _parseColor(characterColor);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Row(
         children: [
-          // 캐릭터
-          // TODO(backend): 유저의 characterColor 필드에서 캐릭터 이미지 결정
-          Image.asset(
-            'assets/images/icons/${user['character']}.png',
-            width: 44,
-            height: 44,
+          // 실제 character.color를 캐릭터 실루엣에 입혀서 표시
+          ColorFiltered(
+            colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+            child: Image.asset(
+              'assets/images/icons/character_yellow.png',
+              width: 44,
+              height: 44,
+            ),
           ),
           const SizedBox(width: 14),
-          // 이름 + 핸들
+          // 이름 + @표시 (handle 필드가 스키마에 없어서 displayName을 그대로 사용)
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  user['name']!,
+                  displayName,
                   style: const TextStyle(
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w700,
@@ -286,7 +415,7 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
                   ),
                 ),
                 Text(
-                  '@${user['handle']}',
+                  '@$displayName',
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w400,
