@@ -516,6 +516,9 @@ class _HotspotPartySheet extends StatefulWidget {
 class _HotspotPartySheetState extends State<_HotspotPartySheet> {
   bool _isReserving = false;
 
+  // "Add friends"에서 선택한 친구 목록 (플로깅 시작 시 함께 저장됨)
+  List<Map<String, dynamic>> _selectedPartyMembers = [];
+
   // 신고자 이름은 uid만 있고 문서엔 없어서 별도 조회가 필요함
   String _reporterName = '...';
 
@@ -561,8 +564,10 @@ class _HotspotPartySheetState extends State<_HotspotPartySheet> {
         Navigator.of(context).pop(); // 시트 닫기
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) =>
-                PloggingScreen(reservedHotspot: existingReservation),
+            builder: (_) => PloggingScreen(
+              reservedHotspot: existingReservation,
+              partyMembers: _selectedPartyMembers,
+            ),
           ),
         );
         return;
@@ -577,11 +582,14 @@ class _HotspotPartySheetState extends State<_HotspotPartySheet> {
 
       if (!mounted) return;
 
-      // 예약 성공 → PloggingScreen으로 이동 (hotspot 정보 함께 전달)
+      // 예약 성공 → PloggingScreen으로 이동 (hotspot 정보 + 파티원 정보 함께 전달)
       Navigator.of(context).pop(); // 시트 닫기
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => PloggingScreen(reservedHotspot: widget.hotspot),
+          builder: (_) => PloggingScreen(
+            reservedHotspot: widget.hotspot,
+            partyMembers: _selectedPartyMembers,
+          ),
         ),
       );
     } catch (e) {
@@ -789,14 +797,24 @@ class _HotspotPartySheetState extends State<_HotspotPartySheet> {
                       // 왼쪽: Add friends 카드
                       Expanded(
                         child: GestureDetector(
-                          onTap: () {
-                            Navigator.pop(context); // 시트 먼저 닫기
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const PartyInviteScreen(),
-                              ),
-                            );
+                          onTap: () async {
+                            // 시트를 닫지 않고 그 위에 PartyInviteScreen을 띄웁니다.
+                            // (닫아버리면 이 State 자체가 사라져서, 돌아왔을 때
+                            //  선택한 친구 목록을 저장할 곳이 없어집니다)
+                            final result =
+                                await Navigator.push<
+                                  List<Map<String, dynamic>>
+                                >(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const PartyInviteScreen(),
+                                  ),
+                                );
+
+                            if (result != null && mounted) {
+                              setState(() => _selectedPartyMembers = result);
+                            }
                           },
                           child: Container(
                             height: 120,
