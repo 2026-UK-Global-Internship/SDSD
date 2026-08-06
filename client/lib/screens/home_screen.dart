@@ -207,9 +207,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 60),
+            const SizedBox(height: 160),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 100, 24, 0),
+              padding: const EdgeInsets.fromLTRB(24, 30, 24, 0),
               child: Row(
                 children: [
                   Expanded(

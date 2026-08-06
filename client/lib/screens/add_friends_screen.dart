@@ -255,7 +255,15 @@ class _AddFriendsScreenState extends State<AddFriendsScreen> {
                   ),
                   const SizedBox(width: 8),
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      // 검색어 지우기
+                      _searchController.clear();
+                      setState(() {
+                        _searchText = '';
+                      });
+                      // 키보드 닫기
+                      FocusScope.of(context).unfocus();
+                    },
                     child: const Text(
                       'Close',
                       style: TextStyle(

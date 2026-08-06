@@ -93,77 +93,79 @@ class _LoginScreenState extends State<LoginScreen> {
         height: double.infinity,
         decoration: const BoxDecoration(gradient: _gradient),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 100),
-                Image.asset(
-                  'assets/images/login_photos.png',
-                  width: double.infinity,
-                  height: 340,
-                  fit: BoxFit.contain,
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Ready to run\nand clean?',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 40,
-                    height: 1,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 30),
+                  Image.asset(
+                    'assets/images/login_photos.png',
+                    width: double.infinity,
+                    height: 340,
+                    fit: BoxFit.contain,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text('Get started.', style: AppTextStyles.medium16),
-                const SizedBox(height: 24),
-                _SocialButton(
-                  iconPath: 'assets/images/icons/ic_apple.png',
-                  label: 'Continue with Apple',
-                  backgroundColor: Colors.black,
-                  textColor: Colors.white,
-                  onPressed: _isGoogleLoading
-                      ? null // 구글 로그인 처리 중엔 Apple 버튼도 비활성화
-                      : () {
-                          // TODO: Apple 로그인
-                        },
-                ),
-                const SizedBox(height: 12),
-                _SocialButton(
-                  iconPath: 'assets/images/icons/ic_google.png',
-                  label: 'Continue with Google',
-                  backgroundColor: Colors.white,
-                  textColor: Colors.black,
-                  isLoading: _isGoogleLoading, // ← 추가: 로딩 중이면 스피너 표시
-                  onPressed: _isGoogleLoading
-                      ? null
-                      : _handleGoogleSignIn, // ← 변경: 실제 로직 연결
-                ),
-                const SizedBox(height: 16),
-                Center(
-                  child: GestureDetector(
-                    onTap: _isGoogleLoading
-                        ? null
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Ready to run\nand clean?',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 40,
+                      height: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Get started.', style: AppTextStyles.medium16),
+                  const SizedBox(height: 24),
+                  _SocialButton(
+                    iconPath: 'assets/images/icons/ic_apple.png',
+                    label: 'Continue with Apple',
+                    backgroundColor: Colors.black,
+                    textColor: Colors.white,
+                    onPressed: _isGoogleLoading
+                        ? null // 구글 로그인 처리 중엔 Apple 버튼도 비활성화
                         : () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const SignupScreen(),
-                              ),
-                            );
+                            // TODO: Apple 로그인
                           },
-                    child: const Text(
-                      'Or continue with email',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w500,
-                        fontSize: 14,
-                        decoration: TextDecoration.underline,
+                  ),
+                  const SizedBox(height: 12),
+                  _SocialButton(
+                    iconPath: 'assets/images/icons/ic_google.png',
+                    label: 'Continue with Google',
+                    backgroundColor: Colors.white,
+                    textColor: Colors.black,
+                    isLoading: _isGoogleLoading, // ← 추가: 로딩 중이면 스피너 표시
+                    onPressed: _isGoogleLoading
+                        ? null
+                        : _handleGoogleSignIn, // ← 변경: 실제 로직 연결
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: GestureDetector(
+                      onTap: _isGoogleLoading
+                          ? null
+                          : () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const SignupScreen(),
+                                ),
+                              );
+                            },
+                      child: const Text(
+                        'Or continue with email',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                          decoration: TextDecoration.underline,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
